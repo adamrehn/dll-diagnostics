@@ -165,10 +165,10 @@ class TraceHelpers(object):
 def trace():
 	
 	# Our supported command-line arguments
-	parser = argparse.ArgumentParser(prog='{} trace'.format(sys.argv[0]))
+	parser = argparse.ArgumentParser(prog='{} trace'.format(sys.argv[0]), prefix_chars='-/')
 	parser.add_argument('module', help='DLL or EXE file for which LoadLibrary() call should be traced')
-	parser.add_argument('--raw', action='store_true', help='Print raw trace output in addition to summary info')
-	parser.add_argument('--no-delay-load', action='store_true', help='Don\'t perform traces for the module\'s delay-loaded dependencies')
+	parser.add_argument('--raw', '/RAW', action='store_true', help='Print raw trace output in addition to summary info')
+	parser.add_argument('--no-delay-load', '/NODELAY', action='store_true', help='Don\'t perform traces for the module\'s delay-loaded dependencies')
 	
 	# If no command-line arguments were supplied, display the help message and exit
 	if len(sys.argv) < 2:
