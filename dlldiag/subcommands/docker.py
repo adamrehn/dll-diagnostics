@@ -1,6 +1,6 @@
 from ..version import __version__
 from ..common import FileIO
-import argparse, sys
+import argparse, os, sys
 
 
 # Our template Dockerfile code
@@ -46,7 +46,11 @@ def docker():
 	args = parser.parse_args()
 	
 	# Fill in the template Dockerfile code and write it to the specified output file
-	FileIO.writeFile(args.dockerfile, DOCKERFILE_TEMPLATE.format(args.base, __version__, __version__))
+	outfile = os.path.abspath(args.dockerfile)
+	FileIO.writeFile(outfile, DOCKERFILE_TEMPLATE.format(args.base, __version__, __version__))
+	
+	# Print the absolute path to the output file
+	print('Wrote generated Dockerfile to {}'.format(outfile), flush=True)
 
 
 DESCRIPTOR = {
