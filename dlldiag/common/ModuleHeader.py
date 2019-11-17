@@ -12,6 +12,7 @@ class ModuleHeader(object):
 		'''
 		self._filename = module
 		self._pe = pefile.PE(module, fast_load=True)
+		self._parsedImports = False
 	
 	def getArchitecture(self):
 		'''
@@ -42,14 +43,39 @@ class ModuleHeader(object):
 		else:
 			raise RuntimeError('unrecognised PE module type')
 	
-	def listDependencies(self):
+	def listAllImports(self):
 		'''
-		Returns the list of DLL files that the module imports
+		Returns an aggregated list of all dependencies that the module imports
 		'''
-		self._pe.parse_data_directories(import_dllnames_only=True)
-		return [
-			imported.dll.decode('utf-8') for imported in
-			getattr(self._pe, 'DIRECTORY_ENTRY_IMPORT', []) +
-			getattr(self._pe, 'DIRECTORY_ENTRY_DELAY_IMPORT', []) +
-			getattr(self._pe, 'DIRECTORY_ENTRY_BOUND_IMPORT', [])
-		]
+		return self.listImports() + self.listDelayLoadedImports() + self.listBoundImports()
+	
+	def listImports(self):
+		'''
+		Returns a list of the standard imports for the module
+		'''
+		return self._getImportsForDirectory('DIRECTORY_ENTRY_IMPORT')
+	
+	def listDelayLoadedImports(self):
+		'''
+		Returns a list of the delay-loaded imports for the module
+		'''
+		return self._getImportsForDirectory('DIRECTORY_ENTRY_DELAY_IMPORT')
+	
+	def listBoundImports(self):
+		'''
+		Returns a list of the bound imports for the module
+		'''
+		return self._getImportsForDirectory('DIRECTORY_ENTRY_BOUND_IMPORT')
+	
+	def _getImportsForDirectory(self, directory):
+		'''
+		Retrieves the list of imports for a specific directory entry
+		'''
+		
+		# If we haven't already parsed the imports, do so now
+		if self._parsedImports == False:
+			self._pe.parse_data_directories(import_dllnames_only=True)
+			self._parsedImports = True
+		
+		# Retrieve the imports for the specified directory entry
+		return [imported.dll.decode('utf-8') for imported in getattr(self._pe, directory, [])]

@@ -22,7 +22,7 @@ def deps():
 		print('Parsing module header and identifying direct dependencies... ', end='')
 		header = ModuleHeader(args.module)
 		architecture = header.getArchitecture()
-		dependencies = header.listDependencies()
+		dependencies = header.listAllImports()
 		print('done.\n')
 		
 		# Display the module details
