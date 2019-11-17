@@ -19,7 +19,7 @@ def main():
 	if len(sys.argv) > 1:
 		
 		# Verify that the specified subcommand is valid
-		subcommand = sys.argv[1]
+		subcommand = sys.argv[1].lower()
 		if subcommand not in subcommands.keys():
 			print('Error: unrecognised subcommand "{}".'.format(subcommand), file=sys.stderr)
 			sys.exit(1)
