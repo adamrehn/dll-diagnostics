@@ -1,4 +1,4 @@
-from ..common import ModuleHeader, OutputFormatting, WindowsApi
+from ..common import ModuleHeader, OutputFormatting, StringUtils, WindowsApi
 from termcolor import colored
 import argparse, os, sys
 
@@ -25,7 +25,7 @@ def deps():
 		print('Parsing module header and identifying direct dependencies... ', end='')
 		header = ModuleHeader(args.module)
 		architecture = header.getArchitecture()
-		dependencies = header.listAllImports()
+		dependencies = StringUtils.sortCaseInsensitive(header.listAllImports())
 		print('done.\n')
 		
 		# Display the module details
