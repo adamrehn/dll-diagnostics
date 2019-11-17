@@ -1,4 +1,4 @@
-from ..common import CommonErrors, HelperProcess, ModuleHeader, OutputFormatting, WindowsDebugger
+from ..common import CommonErrors, HelperProcess, ModuleHeader, OutputFormatting, StringUtils, WindowsDebugger
 from termcolor import colored
 from ctypes import *
 import argparse, os, sys
@@ -86,56 +86,18 @@ class TraceHelpers(object):
 		the call was unsuccessful
 		'''
 		return colored(call.dll, color='green') if call.result == 0 else OutputFormatting.formatColouredResult(call.result, [call.dll])
-
-
-def trace():
 	
-	# Our supported command-line arguments
-	parser = argparse.ArgumentParser(prog='{} trace'.format(sys.argv[0]))
-	parser.add_argument('module', help='DLL or EXE file for which LoadLibrary() call should be traced')
-	parser.add_argument('--raw', action='store_true', help='Print raw trace output in addition to summary info')
-	
-	# If no command-line arguments were supplied, display the help message and exit
-	if len(sys.argv) < 2:
-		parser.print_help()
-		sys.exit(0)
-	
-	# Parse the supplied command-line arguments
-	args = parser.parse_args()
-	
-	try:
+	@staticmethod
+	def performTrace(debugger, helper, module, architecture, cwd):
+		'''
+		Performs a `LoadLibrary()` trace with loader snaps enabled
+		'''
 		
 		# Load NTDLL.DLL so we can use the RtlNtStatusToDosError() function to map NTSTATUS codes to Windows API error codes
 		ntdll = cdll.LoadLibrary('ntdll')
 		
-		# Ensure the module path is an absolute path
-		args.module = os.path.abspath(args.module)
-		
-		# Determine the architecture of the module
-		print('Parsing module header and detecting architecture... ', end='')
-		header = ModuleHeader(args.module)
-		architecture = header.getArchitecture()
-		print('done.\n')
-		
-		# Display the module details
-		print('Parsed module details:')
-		OutputFormatting.printModuleDetails(header)
-		print()
-		
-		# Verify that the debugger for the module's architecture is installed
-		debugger = WindowsDebugger()
-		if debugger.haveDebugger(architecture) == False:
-			CommonErrors.debuggerNotInstalled(architecture)
-		
-		# Determine if our library loader helper for the module's architecture can be run
-		helper = HelperProcess(architecture, 'loadlibrary')
-		if helper.canRun() == False:
-			CommonErrors.cannotRunHelper(architecture)
-		
 		# Run our library loader helper through the debugger with loader snaps enabled
-		print('Performing LoadLibrary() trace... ', end='')
-		result = debugger.debugWithLoaderSnaps(architecture, helper.executable, [args.module], cwd=os.path.dirname(args.module))
-		print('done.\n', flush=True)
+		result = debugger.debugWithLoaderSnaps(architecture, helper.executable, [module], cwd=cwd)
 		
 		# Locate the subset of the debugger output related to our `LoadLibrary()` call
 		startMarker = '[LOADLIBRARY][START]'
@@ -196,12 +158,82 @@ def trace():
 			OutputFormatting.printWarning('return values could not be found for the following function calls:')
 			print('\n'.join([str(c) for c in unresolved]) + '\n', flush=True)
 		
+		# Return the raw trace output and the list of calls for which a return value was found
+		return (subset, calls)
+
+
+def trace():
+	
+	# Our supported command-line arguments
+	parser = argparse.ArgumentParser(prog='{} trace'.format(sys.argv[0]))
+	parser.add_argument('module', help='DLL or EXE file for which LoadLibrary() call should be traced')
+	parser.add_argument('--raw', action='store_true', help='Print raw trace output in addition to summary info')
+	parser.add_argument('--no-delay-load', action='store_true', help='Don\'t perform traces for the module\'s delay-loaded dependencies')
+	
+	# If no command-line arguments were supplied, display the help message and exit
+	if len(sys.argv) < 2:
+		parser.print_help()
+		sys.exit(0)
+	
+	# Parse the supplied command-line arguments
+	args = parser.parse_args()
+	
+	try:
+		
+		# Ensure the module path is an absolute path
+		args.module = os.path.abspath(args.module)
+		
+		# Determine the architecture of the module
+		print('Parsing module header and detecting architecture... ', end='')
+		header = ModuleHeader(args.module)
+		architecture = header.getArchitecture()
+		print('done.\n')
+		
+		# Retrieve the list of delay-loaded dependencies, unless requested otherwise
+		dependencies = []
+		if args.no_delay_load == False:
+			print('Identifying the module\'s delay-loaded dependencies... ', end='')
+			dependencies = StringUtils.sortCaseInsensitive(header.listDelayLoadedImports())
+			print('done.\n')
+		
+		# Display the module details
+		print('Parsed module details:')
+		OutputFormatting.printModuleDetails(header)
+		print()
+		
+		# Display the list of delay-loaded dependencies
+		if args.no_delay_load == False:
+			print('The module imports {} delay-loaded dependencies:'.format(len(dependencies)))
+			print('\n'.join(dependencies))
+			print()
+		
+		# Verify that the debugger for the module's architecture is installed
+		debugger = WindowsDebugger()
+		if debugger.haveDebugger(architecture) == False:
+			CommonErrors.debuggerNotInstalled(architecture)
+		
+		# Determine if our library loader helper for the module's architecture can be run
+		helper = HelperProcess(architecture, 'loadlibrary')
+		if helper.canRun() == False:
+			CommonErrors.cannotRunHelper(architecture)
+		
+		# Perform the LoadLibrary() trace for the module and each of its delay-loaded dependencies
+		cwd = os.path.dirname(args.module)
+		rawOutput = ''
+		calls = []
+		for module in [args.module] + dependencies:
+			print('Performing LoadLibrary() trace for {}...'.format(module))
+			result = TraceHelpers.performTrace(debugger, helper, module, architecture, cwd)
+			rawOutput += result[0]
+			calls = calls + result[1]
+		print('Done.\n', flush=True)
+		
 		# Generate and print summaries each function except for `LdrpResolveDllName`, which requires special treatment
 		for function in [c for c in TraceHelpers.getFunctionWhitelist() if c != 'LdrpResolveDllName']:
 			
 			# Retrieve the list of calls to the current function and the set of unique DLL names used as arguments
 			instances = [c for c in calls if c.function == function]
-			dlls = list({c.dll.lower(): c.dll for c in instances}.values())
+			dlls = StringUtils.uniqueCaseInsensitive([c.dll for c in instances], sort=True)
 			
 			# For cases where there are multiple calls for a single DLL, treat the result as success if at least one call succeeded
 			results = {
@@ -217,7 +249,7 @@ def trace():
 		
 		# Retrieve the list of calls to `LdrpResolveDllName` and the filenames of the DLLs that were being resolved
 		instances = [c for c in calls if c.function == 'LdrpResolveDllName']
-		dlls = list({os.path.basename(c.dll.lower()): os.path.basename(c.dll) for c in instances}.values())
+		dlls = StringUtils.uniqueCaseInsensitive([os.path.basename(c.dll) for c in instances], sort=True)
 		
 		# Determine which path (if any) each DLL was resolved to
 		resolved = {
@@ -230,21 +262,10 @@ def trace():
 		OutputFormatting.printRows(resolved.items(), spacing=4)
 		print()
 		
-		# Display the delay-load dependencies notice
-		print(colored('\nImportant note regarding delay-loaded dependencies:\n', color='yellow'))
-		print('The LoadLibrary() function does not load dependencies which are delay-loaded,')
-		print('since these dependencies are only loaded the first time that a function from')
-		print('the dependency library is called. As such, there may be dependencies that')
-		print('the module requires in order to function correctly that are absent from')
-		print('the LoadLibrary() trace performed above.\n')
-		print('Use the `{} deps` command to list all of the dependencies for a module,'.format(sys.argv[0]))
-		print('including delay-loaded dependencies.')
-		sys.stdout.flush()
-		
 		# Print the raw trace output if the user requested it
 		if args.raw == True:
 			print('Raw trace output:')
-			print(subset, end='', flush=True)
+			print(rawOutput, end='', flush=True)
 		
 	except RuntimeError as e:
 		print('Error: {}'.format(e))
