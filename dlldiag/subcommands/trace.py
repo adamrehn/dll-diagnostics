@@ -108,6 +108,9 @@ def trace():
 		# Load NTDLL.DLL so we can use the RtlNtStatusToDosError() function to map NTSTATUS codes to Windows API error codes
 		ntdll = cdll.LoadLibrary('ntdll')
 		
+		# Ensure the module path is an absolute path
+		args.module = os.path.abspath(args.module)
+		
 		# Determine the architecture of the module
 		print('Parsing module header and detecting architecture... ', end='')
 		header = ModuleHeader(args.module)

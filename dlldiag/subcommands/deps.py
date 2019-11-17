@@ -18,6 +18,9 @@ def deps():
 	
 	try:
 		
+		# Ensure the module path is an absolute path
+		args.module = os.path.abspath(args.module)
+		
 		# Parse the PE header for the module
 		print('Parsing module header and identifying direct dependencies... ', end='')
 		header = ModuleHeader(args.module)
