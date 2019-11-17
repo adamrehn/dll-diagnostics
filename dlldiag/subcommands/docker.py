@@ -1,3 +1,4 @@
+from ..version import __version__
 from ..common import FileIO
 import argparse, sys
 
@@ -6,6 +7,9 @@ import argparse, sys
 DOCKERFILE_TEMPLATE = '''# escape=`
 FROM {}
 SHELL ["cmd", "/S", "/C"]
+
+# Label the image with the dll-diagnostics version number that it contains
+LABEL DLLDIAG_VERSION={}
 
 # We need administrative privileges for installing software and for running `dlldiag trace`
 USER ContainerAdministrator
@@ -17,7 +21,7 @@ RUN powershell -NoProfile -ExecutionPolicy Bypass -Command "iex ((New-Object Sys
 RUN choco install -y python vcredist140 windbg
 
 # Install dlldiag
-RUN pip install dll-diagnostics
+RUN pip install dll-diagnostics=={}
 '''
 
 
@@ -42,7 +46,7 @@ def docker():
 	args = parser.parse_args()
 	
 	# Fill in the template Dockerfile code and write it to the specified output file
-	FileIO.writeFile(args.dockerfile, DOCKERFILE_TEMPLATE.format(args.base))
+	FileIO.writeFile(args.dockerfile, DOCKERFILE_TEMPLATE.format(args.base, __version__, __version__))
 
 
 DESCRIPTOR = {

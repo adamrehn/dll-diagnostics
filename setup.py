@@ -5,9 +5,13 @@ from setuptools import setup
 with open(abspath(join(dirname(__file__), 'README.md')), 'rb') as readmeFile:
 	__readme__ = readmeFile.read().decode('utf-8')
 
+# Read the version number from version.py
+with open(abspath(join(dirname(__file__), 'dlldiag', 'version.py'))) as versionFile:
+	__version__ = versionFile.read().strip().replace('__version__ = ', '').replace("'", '')
+
 setup(
 	name='dll-diagnostics',
-	version='0.0.1',
+	version=__version__,
 	description='Tools for diagnosing DLL dependency loading issues',
 	long_description=__readme__,
 	long_description_content_type='text/markdown',
