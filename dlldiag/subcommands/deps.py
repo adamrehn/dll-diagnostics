@@ -25,7 +25,7 @@ def deps():
 		print('Parsing module header and identifying direct dependencies... ', end='')
 		header = ModuleHeader(args.module)
 		architecture = header.getArchitecture()
-		dependencies = StringUtils.sortCaseInsensitive(header.listAllImports())
+		dependencies = StringUtils.uniqueCaseInsensitive(header.listAllImports(), sort=True)
 		print('done.\n')
 		
 		# Display the module details

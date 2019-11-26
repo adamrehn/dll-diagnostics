@@ -65,9 +65,9 @@ class ModuleHeader(object):
 		'''
 		Returns a list of the bound imports for the module
 		'''
-		return self._getImportsForDirectory('DIRECTORY_ENTRY_BOUND_IMPORT')
+		return self._getImportsForDirectory('DIRECTORY_ENTRY_BOUND_IMPORT', attribute='name')
 	
-	def _getImportsForDirectory(self, directory):
+	def _getImportsForDirectory(self, directory, attribute='dll'):
 		'''
 		Retrieves the list of imports for a specific directory entry
 		'''
@@ -78,4 +78,4 @@ class ModuleHeader(object):
 			self._parsedImports = True
 		
 		# Retrieve the imports for the specified directory entry
-		return [imported.dll.decode('utf-8') for imported in getattr(self._pe, directory, [])]
+		return [getattr(imported, attribute).decode('utf-8') for imported in getattr(self._pe, directory, [])]
