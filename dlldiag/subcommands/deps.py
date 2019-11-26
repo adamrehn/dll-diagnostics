@@ -33,23 +33,29 @@ def deps():
 		OutputFormatting.printModuleDetails(header)
 		print()
 		
-		# Iterate over each of the module's dependencies and attempt to load them
-		cwd = os.path.dirname(args.module)
-		columnWidth = max([len(dll) for dll in dependencies]) + 4
-		print('Attempting to load the module\'s direct dependencies:\n', flush=True)
-		for dll in dependencies:
-			result = WindowsApi.loadModule(dll, cwd, architecture)
-			OutputFormatting.printRow(dll, OutputFormatting.formatColouredResult(result, [dll], 'Loaded successfully'), width=columnWidth)
+		# Verify that the module has at least one dependency
+		if len(dependencies) > 0:
+			
+			# Iterate over each of the module's dependencies and attempt to load them
+			cwd = os.path.dirname(args.module)
+			columnWidth = max([len(dll) for dll in dependencies]) + 4
+			print('Attempting to load the module\'s direct dependencies:\n', flush=True)
+			for dll in dependencies:
+				result = WindowsApi.loadModule(dll, cwd, architecture)
+				OutputFormatting.printRow(dll, OutputFormatting.formatColouredResult(result, [dll], 'Loaded successfully'), width=columnWidth)
+				sys.stdout.flush()
+			
+			# Display the error propagation notice
+			print(colored('\n\nImportant note regarding errors:\n', color='yellow'))
+			print('Errors loading indirect dependencies are propagated by LoadLibrary(), which')
+			print('means any errors displayed above that indicate missing or corrupt modules may')
+			print('in fact be referring to a child dependency of a direct dependency, rather than')
+			print('the direct dependency itself.\n')
+			print('Use the `{} trace` command to inspect loading errors for a module in detail.'.format(sys.argv[0]))
 			sys.stdout.flush()
-		
-		# Display the error propagation notice
-		print(colored('\n\nImportant note regarding errors:\n', color='yellow'))
-		print('Errors loading indirect dependencies are propagated by LoadLibrary(), which')
-		print('means any errors displayed above that indicate missing or corrupt modules may')
-		print('in fact be referring to a child dependency of a direct dependency, rather than')
-		print('the direct dependency itself.\n')
-		print('Use the `{} trace` command to inspect loading errors for a module in detail.'.format(sys.argv[0]))
-		sys.stdout.flush()
+			
+		else:
+			print('No dependencies detected.')
 		
 	except RuntimeError as e:
 		print('Error: {}'.format(e))
