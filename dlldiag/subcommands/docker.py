@@ -8,9 +8,6 @@ DOCKERFILE_TEMPLATE = '''# escape=`
 FROM {}
 SHELL ["cmd", "/S", "/C"]
 
-# Label the image with the dll-diagnostics version number that it contains
-LABEL DLLDIAG_VERSION={}
-
 # We need administrative privileges for installing software and for running `dlldiag trace`
 USER ContainerAdministrator
 
@@ -19,6 +16,9 @@ RUN powershell -NoProfile -ExecutionPolicy Bypass -Command "iex ((New-Object Sys
 
 # Install Python 3.x, the Microsoft Visual C++ Redistributable for Visual Studio 2015-2019, and the Debugging Tools for Windows 10 (WinDbg)
 RUN choco install -y python vcredist140 windbg
+
+# Label the image with the dll-diagnostics version number that it contains
+LABEL DLLDIAG_VERSION={}
 
 # Install dlldiag
 RUN pip install dll-diagnostics=={}
