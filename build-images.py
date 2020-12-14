@@ -3,7 +3,7 @@ from termcolor import colored
 
 
 # The Windows releases we build images for
-RELEASES = ['1809', '1903', '1909']
+RELEASES = ['1809', '1903', '1909', '2004', '20H2']
 
 # The alias tags we create for convenience purposes
 ALIASES = {'ltsc2019': '1809'}
