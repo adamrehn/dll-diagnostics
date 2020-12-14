@@ -15,7 +15,7 @@ USER ContainerAdministrator
 RUN powershell -NoProfile -ExecutionPolicy Bypass -Command "iex ((New-Object System.Net.WebClient).DownloadString('https://chocolatey.org/install.ps1'))"
 
 # Install Python 3.x, the Microsoft Visual C++ Redistributable for Visual Studio 2015-2019, and the Debugging Tools for Windows 10 (WinDbg)
-RUN choco install -y python vcredist140 windbg
+RUN choco install -y python vcredist140 windows-sdk-10-version-2004-windbg
 
 # Label the image with the dll-diagnostics version number that it contains
 LABEL DLLDIAG_VERSION={}
