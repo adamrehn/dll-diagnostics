@@ -55,6 +55,10 @@ class OutputFormatting(object):
 		`indent` specifies the number of characters to indent each line by.
 		'''
 		
+		# If we received zero rows then don't print anything
+		if len(rows) == 0:
+			return
+		
 		# Calculate the width of the left-hand column based on the longest value
 		width = max([len(row[0]) for row in rows]) + spacing
 		
