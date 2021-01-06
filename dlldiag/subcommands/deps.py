@@ -7,6 +7,8 @@ def deps():
 	# Our supported command-line arguments
 	parser = argparse.ArgumentParser(prog='{} deps'.format(sys.argv[0]))
 	parser.add_argument('module', help='DLL or EXE file for which direct dependencies will be loaded')
+	parser.add_argument('--show', choices=['all', 'delayload', 'no-delayload'], default='all', help='Which type of dependencies to show')
+
 	
 	# If no command-line arguments were supplied, display the help message and exit
 	if len(sys.argv) < 2:
@@ -25,7 +27,13 @@ def deps():
 		print('Parsing module header and identifying direct dependencies... ', end='')
 		header = ModuleHeader(args.module)
 		architecture = header.getArchitecture()
-		dependencies = StringUtils.uniqueCaseInsensitive(header.listAllImports(), sort=True)
+		if args.show == 'all':
+			imports = header.listAllImports()
+		elif args.show == 'delayload':
+			imports = header.listDelayLoadedImports()
+		elif args.show == 'no-delayload':
+			imports = header.listImports() + header.listBoundImports()
+		dependencies = StringUtils.uniqueCaseInsensitive(imports, sort=True)
 		print('done.\n')
 		
 		# Display the module details
