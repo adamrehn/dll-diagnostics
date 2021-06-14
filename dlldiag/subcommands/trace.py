@@ -104,13 +104,20 @@ class TraceHelpers(object):
 		
 		# If we ran the library loader helper then locate the subset of the debugger output related to our `LoadLibrary()` call
 		if helper is not None:
+			
+			# Locate the start and end markers in the debugger stdout so we avoid parts of the trace that relate
+			# purely to loading the helper executable rather than loading the module we are interested in
 			startMarker = '[LOADLIBRARY][START]'
 			endMarker = '[LOADLIBRARY][END]'
 			start = result.stdout.index(startMarker) + len(startMarker)
 			end = result.stdout.index(endMarker)
 			subset = result.stdout[start:end]
+			
 		else:
-			subset = result.stdout
+			
+			# When running the module itself, use the log file output rather than stdout,
+			# so we don't get actual program output intermingled with the debugger output
+			subset = result.log
 		
 		# Split each line into prefix, function name, and details
 		lines = [line.split(' - ', 2) for line in subset.replace('\r\n', '\n').split('\n')]

@@ -1,5 +1,6 @@
-import os, subprocess
+import os, subprocess, tempfile
 from os.path import basename, exists, join
+from .FileIO import FileIO
 
 class WindowsDebugger(object):
 	'''
@@ -49,15 +50,25 @@ class WindowsDebugger(object):
 		except:
 			raise RuntimeError('could not enable loader snaps. Please ensure you have sufficient privileges to perform this operation.')
 		
-		# Run the executable through the debugger and capture the output
-		try:
-			return subprocess.run(
-				[join(self._debuggers[architecture], 'cdb.exe'), executable] + args,
-				stdout = subprocess.PIPE,
-				stderr = subprocess.PIPE,
-				input = 'g\nq\n',
-				universal_newlines = True,
-				cwd = cwd
-			)
-		except:
-			raise RuntimeError('could not run the debugger. Please ensure you have sufficient privileges to perform this operation.')
+		# Create a temporary directory to hold the log output from the debugger
+		with tempfile.TemporaryDirectory() as tempDir:
+			
+			# Run the executable through the debugger and capture the output
+			try:
+				logFile = join(tempDir, 'log.txt')
+				result = subprocess.run(
+					[join(self._debuggers[architecture], 'cdb.exe'), '-logou', logFile, executable] + args,
+					stdout = subprocess.PIPE,
+					stderr = subprocess.PIPE,
+					input = 'g\nq\n',
+					universal_newlines = True,
+					cwd = cwd
+				)
+				
+				logData = FileIO.readFile(logFile, encoding='utf_16_le')
+				setattr(result, 'log', logData)
+				return result
+				
+			except Exception as e:
+				raise e
+				#raise RuntimeError('could not run the debugger. Please ensure you have sufficient privileges to perform this operation.')
