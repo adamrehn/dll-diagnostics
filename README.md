@@ -41,4 +41,4 @@ The `dlldiag` command-line tool provides the following subcommands:
 
 ## Legal
 
-Copyright &copy; 2019, Adam Rehn. Licensed under the MIT License, see the file [LICENSE](https://github.com/adamrehn/dll-diagnostics/blob/master/LICENSE) for details.
+Copyright &copy; 2019-2021, Adam Rehn. Licensed under the MIT License, see the file [LICENSE](https://github.com/adamrehn/dll-diagnostics/blob/master/LICENSE) for details.
