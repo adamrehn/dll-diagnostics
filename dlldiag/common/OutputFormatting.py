@@ -30,7 +30,7 @@ class OutputFormatting(object):
 		'''
 		Prints a warning message in yellow text
 		'''
-		print(colored('Warning: {}'.format(message), color='yellow'))
+		print(colored('Warning: {}'.format(message), color='yellow'), flush=True)
 	
 	@staticmethod
 	def printRow(lhs, rhs, width, indent=0):

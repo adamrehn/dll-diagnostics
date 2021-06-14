@@ -54,7 +54,7 @@ class WindowsDebugger(object):
 			return subprocess.run(
 				[join(self._debuggers[architecture], 'cdb.exe'), executable] + args,
 				stdout = subprocess.PIPE,
-				stderr = subprocess.STDOUT,
+				stderr = subprocess.PIPE,
 				input = 'g\nq\n',
 				universal_newlines = True,
 				cwd = cwd

@@ -96,15 +96,21 @@ class TraceHelpers(object):
 		# Load NTDLL.DLL so we can use the RtlNtStatusToDosError() function to map NTSTATUS codes to Windows API error codes
 		ntdll = cdll.LoadLibrary('ntdll')
 		
-		# Run our library loader helper through the debugger with loader snaps enabled
-		result = debugger.debugWithLoaderSnaps(architecture, helper.executable, [module], cwd=cwd)
+		# Determine whether we are running our library loader helper or the module itself through the debugger with loader snaps enabled
+		if helper is not None:
+			result = debugger.debugWithLoaderSnaps(architecture, helper.executable, [module], cwd=cwd)
+		else:
+			result = debugger.debugWithLoaderSnaps(architecture, module, [], cwd=cwd)
 		
-		# Locate the subset of the debugger output related to our `LoadLibrary()` call
-		startMarker = '[LOADLIBRARY][START]'
-		endMarker = '[LOADLIBRARY][END]'
-		start = result.stdout.index(startMarker) + len(startMarker)
-		end = result.stdout.index(endMarker)
-		subset = result.stdout[start:end]
+		# If we ran the library loader helper then locate the subset of the debugger output related to our `LoadLibrary()` call
+		if helper is not None:
+			startMarker = '[LOADLIBRARY][START]'
+			endMarker = '[LOADLIBRARY][END]'
+			start = result.stdout.index(startMarker) + len(startMarker)
+			end = result.stdout.index(endMarker)
+			subset = result.stdout[start:end]
+		else:
+			subset = result.stdout
 		
 		# Split each line into prefix, function name, and details
 		lines = [line.split(' - ', 2) for line in subset.replace('\r\n', '\n').split('\n')]
@@ -140,7 +146,7 @@ class TraceHelpers(object):
 					match.result = ntdll.RtlNtStatusToDosError(int(parsed['result'], 16))
 					pending.remove(match)
 					
-				elif matched == False and len(parsedLines) > 1:
+				elif len(parsedLines) > 1:
 					
 					# Match not found but there are other lines remaining, so push this one back in the queue
 					OutputFormatting.printWarning('encountered a RETURN trace line before its corresponding ENTER line')
@@ -156,10 +162,10 @@ class TraceHelpers(object):
 		calls = [c for c in calls if c.result is not None]
 		if len(unresolved) > 0:
 			OutputFormatting.printWarning('return values could not be found for the following function calls:')
-			print('\n'.join([str(c) for c in unresolved]) + '\n', flush=True)
+			print(colored('- ' + '\n- '.join([str(c) for c in unresolved]) + '\n', color='yellow'), flush=True)
 		
 		# Return the raw trace output and the list of calls for which a return value was found
-		return (subset, calls)
+		return (subset + result.stderr, calls)
 
 
 def trace():
@@ -169,6 +175,7 @@ def trace():
 	parser.add_argument('module', help='DLL or EXE file for which LoadLibrary() call should be traced')
 	parser.add_argument('--raw', '/RAW', action='store_true', help='Print raw trace output in addition to summary info')
 	parser.add_argument('--no-delay-load', '/NODELAY', action='store_true', help='Don\'t perform traces for the module\'s delay-loaded dependencies')
+	parser.add_argument('--run', '/RUN', action='store_true', help='Run the executable and trace all LoadLibrary() calls (EXE files only)')
 	
 	# If no command-line arguments were supplied, display the help message and exit
 	if len(sys.argv) < 2:
@@ -227,6 +234,14 @@ def trace():
 			rawOutput += result[0]
 			calls = calls + result[1]
 		print('Done.\n', flush=True)
+		
+		# If the module is an executable and the user requested that we run it, run the executable itself through the debugger and perform LoadLibrary() traces
+		if header.getType() == 'Executable' and args.run == True:
+			print('Running executable {} and tracing all LoadLibrary() calls...'.format(module))
+			result = TraceHelpers.performTrace(debugger, None, module, architecture, cwd)
+			rawOutput += result[0]
+			calls = calls + result[1]
+			print('Done.\n', flush=True)
 		
 		# Generate and print summaries each function except for `LdrpResolveDllName`, which requires special treatment
 		for function in [c for c in TraceHelpers.getFunctionWhitelist() if c != 'LdrpResolveDllName']:
