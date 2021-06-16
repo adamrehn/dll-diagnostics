@@ -88,7 +88,7 @@ class TraceHelpers(object):
 		return colored(call.dll, color='green') if call.result == 0 else OutputFormatting.formatColouredResult(call.result, [call.dll])
 	
 	@staticmethod
-	def performTrace(debugger, helper, module, architecture, cwd):
+	def performTrace(debugger, helper, module, architecture, cwd, args=[]):
 		'''
 		Performs a `LoadLibrary()` trace with loader snaps enabled
 		'''
@@ -100,7 +100,7 @@ class TraceHelpers(object):
 		if helper is not None:
 			result = debugger.debugWithLoaderSnaps(architecture, helper.executable, [module], cwd=cwd)
 		else:
-			result = debugger.debugWithLoaderSnaps(architecture, module, [], cwd=cwd)
+			result = debugger.debugWithLoaderSnaps(architecture, module, args=args, cwd=cwd)
 		
 		# If we ran the library loader helper then locate the subset of the debugger output related to our `LoadLibrary()` call
 		if helper is not None:
@@ -190,7 +190,7 @@ def trace():
 		sys.exit(0)
 	
 	# Parse the supplied command-line arguments
-	args = parser.parse_args()
+	args, run_args = parser.parse_known_args()
 	
 	try:
 		
@@ -245,7 +245,7 @@ def trace():
 		# If the module is an executable and the user requested that we run it, run the executable itself through the debugger and perform LoadLibrary() traces
 		if header.getType() == 'Executable' and args.run == True:
 			print('Running executable {} and tracing all LoadLibrary() calls...'.format(module))
-			result = TraceHelpers.performTrace(debugger, None, module, architecture, cwd)
+			result = TraceHelpers.performTrace(debugger, None, module, architecture, cwd, run_args)
 			rawOutput += result[0]
 			calls = calls + result[1]
 			print('Done.\n', flush=True)
