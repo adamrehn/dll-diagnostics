@@ -1,3 +1,4 @@
+#pragma once
 #include <string>
 
 // Use the _ReturnAddress intrinsic to identify the calling function from a callee
