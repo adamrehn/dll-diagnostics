@@ -1,0 +1,6 @@
+[requires]
+detours/fe7216c037c898b1f65330eda85e6146b6e3cb85@adamrehn/stable
+
+[generators]
+cmake
+json
