@@ -39,11 +39,8 @@ for architecture in ['x86', 'x64']:
 	# Create a temporary directory to hold the build
 	with tempfile.TemporaryDirectory() as tempDir:
 		
-		# Copy the Conan requirements file for our instrumentation DLL to the temporary directory
-		copy(join(sourceDir, 'conanfile.txt'), join(tempDir, 'conanfile.txt'))
-		
 		# Build Detours if it hasn't already been built for this architecture
-		run(['conan', 'install', '.', '--profile={}'.format(profile), '--build=outdated'], cwd=tempDir)
+		run(['conan', 'install', join(sourceDir, 'conanfile.txt'), '--profile={}'.format(profile), '--build=outdated'], cwd=tempDir)
 		
 		# Retrieve the details of the binary package for Detours
 		with open(join(tempDir, 'conanbuildinfo.json'), 'rb') as f:
