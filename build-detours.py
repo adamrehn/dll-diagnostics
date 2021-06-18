@@ -39,9 +39,8 @@ for architecture in ['x86', 'x64']:
 	# Create a temporary directory to hold the build
 	with tempfile.TemporaryDirectory() as tempDir:
 		
-		# Copy the source code for our instrumentation DLL to the temporary directory
-		for file in glob.glob(join(sourceDir, '*')):
-			copy(file, join(tempDir, basename(file)))
+		# Copy the Conan requirements file for our instrumentation DLL to the temporary directory
+		copy(join(sourceDir, 'conanfile.txt'), join(tempDir, 'conanfile.txt'))
 		
 		# Build Detours if it hasn't already been built for this architecture
 		run(['conan', 'install', '.', '--profile={}'.format(profile), '--build=outdated'], cwd=tempDir)
