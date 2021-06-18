@@ -11,8 +11,15 @@ include("${CMAKE_BINARY_DIR}/conanbuildinfo.cmake")
 conan_basic_setup(TARGETS)
 
 # Our common source files
-set(COMMON_FILES common/caller.cpp)
+add_library(common OBJECT
+	common/caller.cpp
+	common/environment.cpp
+	common/log.cpp
+	common/strings.cpp
+)
+conan_target_link_libraries(common)
 
 # Build our instrumentation DLLs
-add_library(dlldiag-detour-loadlibrary SHARED dlldiag-detour-loadlibrary.cpp ${COMMON_FILES})
+add_library(dlldiag-detour-loadlibrary SHARED dlldiag-detour-loadlibrary.cpp $<TARGET_OBJECTS:common>)
 conan_target_link_libraries(dlldiag-detour-loadlibrary)
+target_link_options(dlldiag-detour-loadlibrary PRIVATE "/export:DetourFinishHelperProcess,@1,NONAME")

@@ -1,4 +1,5 @@
 from .CommonErrors import CommonErrors
+from .DetourLibrary import DetourLibrary
 from.FileIO import FileIO
 from .HelperProcess import HelperProcess
 from .ModuleHeader import ModuleHeader

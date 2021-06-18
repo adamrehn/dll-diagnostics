@@ -35,13 +35,14 @@ setup(
 		'colorama',
 		'pefile',
 		'pywin32',
+		'networkx>=2.5.1',
 		'setuptools>=38.6.0',
 		'termcolor',
 		'twine>=1.11.0',
 		'wheel>=0.31.0'
 	],
 	package_data = {
-		'dlldiag': ['bin/*/*.exe']
+		'dlldiag': ['bin/*/*.exe', 'bin/*/*.dll']
 	},
 	entry_points = {
 		'console_scripts': ['dlldiag=dlldiag:main']

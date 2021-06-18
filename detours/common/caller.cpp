@@ -1,4 +1,5 @@
 #include "caller.h"
+#include "strings.h"
 #include <Windows.h>
 using std::string;
 
@@ -10,17 +11,8 @@ string GetCallerModule(void* callerAddress)
 {
 	// Attempt to retrieve a handle to the module that contains the caller's memory address
 	HMODULE callerModule = nullptr;
-	if (GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT, (LPCWSTR)callerAddress, &callerModule))
-	{
-		// Create a buffer to hold the path to the caller's module
-		const DWORD bufsize = 2048;
-		CHAR buffer[bufsize];
-		
-		// Attempt to retrieve the module path
-		DWORD length = GetModuleFileNameA(callerModule, buffer, bufsize);
-		if (length > 0) {
-			return string(buffer, length);
-		}
+	if (GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT, (LPCWSTR)callerAddress, &callerModule)) {
+		return GetModuleName(callerModule);
 	}
 	
 	return string("");
