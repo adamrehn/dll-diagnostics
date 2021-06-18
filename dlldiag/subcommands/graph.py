@@ -97,6 +97,12 @@ class GraphHelpers(object):
 		
 		# Iterate over each module
 		for vertex in graph:
+			
+			# Ignore the "NULL" vertex that is used to represent failed LoadLibrary() calls
+			if vertex == 'NULL':
+				continue
+			
+			# Print the module name
 			print('{}:'.format(colored(vertex, color='cyan')))
 			
 			# Iterate over the edges for the module's LoadLibrary() calls
@@ -111,7 +117,7 @@ class GraphHelpers(object):
 					if details['error']['code'] == 0 and details['result'] != 'NULL':
 						result = colored(details['result'], color='green')
 					else:
-						result = colored(details['error']['message'], color='red')
+						result = colored(details['error']['message'].strip(), color='red')
 					
 					# Print the call details with pretty formatting
 					print('    {} "{}" -> {}'.format(
