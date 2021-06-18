@@ -7,7 +7,7 @@ def main():
 	
 	# Print the version number and copyright notice
 	print('DLL Diagnostic Tools version {}'.format(__version__))
-	print('Copyright (c) 2019 Adam Rehn\n', flush=True)
+	print('Copyright (c) 2019-2021 Adam Rehn\n', flush=True)
 	
 	# Initialise colour output
 	colorama.init()
