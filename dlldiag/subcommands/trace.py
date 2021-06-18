@@ -96,28 +96,16 @@ class TraceHelpers(object):
 		# Load NTDLL.DLL so we can use the RtlNtStatusToDosError() function to map NTSTATUS codes to Windows API error codes
 		ntdll = cdll.LoadLibrary('ntdll')
 		
-		# Determine whether we are running our library loader helper or the module itself through the debugger with loader snaps enabled
-		if helper is not None:
-			result = debugger.debugWithLoaderSnaps(architecture, helper.executable, [module], cwd=cwd)
-		else:
-			result = debugger.debugWithLoaderSnaps(architecture, module, args=args, cwd=cwd)
+		# Run our library loader helper through the debugger with loader snaps enabled
+		result = debugger.debugWithLoaderSnaps(architecture, helper.executable, [module], cwd=cwd)
 		
-		# If we ran the library loader helper then locate the subset of the debugger output related to our `LoadLibrary()` call
-		if helper is not None:
-			
-			# Locate the start and end markers in the debugger stdout so we avoid parts of the trace that relate
-			# purely to loading the helper executable rather than loading the module we are interested in
-			startMarker = '[LOADLIBRARY][START]'
-			endMarker = '[LOADLIBRARY][END]'
-			start = result.stdout.index(startMarker) + len(startMarker)
-			end = result.stdout.index(endMarker)
-			subset = result.stdout[start:end]
-			
-		else:
-			
-			# When running the module itself, use the log file output rather than stdout,
-			# so we don't get actual program output intermingled with the debugger output
-			subset = result.log
+		# Locate the start and end markers in the debugger stdout so we avoid parts of the trace that relate
+		# purely to loading the helper executable rather than loading the module we are interested in
+		startMarker = '[LOADLIBRARY][START]'
+		endMarker = '[LOADLIBRARY][END]'
+		start = result.stdout.index(startMarker) + len(startMarker)
+		end = result.stdout.index(endMarker)
+		subset = result.stdout[start:end]
 		
 		# Split each line into prefix, function name, and details
 		lines = [line.split(' - ', 2) for line in subset.replace('\r\n', '\n').split('\n')]
@@ -182,7 +170,6 @@ def trace():
 	parser.add_argument('module', help='DLL or EXE file for which LoadLibrary() call should be traced')
 	parser.add_argument('--raw', '/RAW', action='store_true', help='Print raw trace output in addition to summary info')
 	parser.add_argument('--no-delay-load', '/NODELAY', action='store_true', help='Don\'t perform traces for the module\'s delay-loaded dependencies')
-	parser.add_argument('--run', '/RUN', action='store_true', help='Run the executable and trace all LoadLibrary() calls (EXE files only)')
 	
 	# If no command-line arguments were supplied, display the help message and exit
 	if len(sys.argv) < 2:
@@ -190,7 +177,7 @@ def trace():
 		sys.exit(0)
 	
 	# Parse the supplied command-line arguments
-	args, run_args = parser.parse_known_args()
+	args = parser.parse_args()
 	
 	try:
 		
@@ -241,14 +228,6 @@ def trace():
 			rawOutput += result[0]
 			calls = calls + result[1]
 		print('Done.\n', flush=True)
-		
-		# If the module is an executable and the user requested that we run it, run the executable itself through the debugger and perform LoadLibrary() traces
-		if header.getType() == 'Executable' and args.run == True:
-			print('Running executable {} and tracing all LoadLibrary() calls...'.format(module))
-			result = TraceHelpers.performTrace(debugger, None, module, architecture, cwd, run_args)
-			rawOutput += result[0]
-			calls = calls + result[1]
-			print('Done.\n', flush=True)
 		
 		# Generate and print summaries each function except for `LdrpResolveDllName`, which requires special treatment
 		for function in [c for c in TraceHelpers.getFunctionWhitelist() if c != 'LdrpResolveDllName']:
