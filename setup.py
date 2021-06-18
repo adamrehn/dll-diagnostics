@@ -36,6 +36,7 @@ setup(
 		'pefile',
 		'pywin32',
 		'networkx>=2.5.1',
+		'pydot>=1.4.2',
 		'setuptools>=38.6.0',
 		'termcolor',
 		'twine>=1.11.0',

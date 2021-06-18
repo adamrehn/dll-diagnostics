@@ -1,5 +1,5 @@
-from ..common import DetourLibrary, ModuleHeader, OutputFormatting
-import argparse, hashlib, json, os, sys
+from ..common import DetourLibrary, FileIO, ModuleHeader, OutputFormatting
+import argparse, hashlib, json, os, re, sys
 from termcolor import colored
 import networkx as nx
 
@@ -122,6 +122,27 @@ class GraphHelpers(object):
 			
 			# Print a blank line after each module's call list
 			print()
+	
+	@staticmethod
+	def writeToFile(graph, outfile):
+		'''
+		Writes the supplied graph to file in GraphViz DOT format
+		'''
+		
+		# Use pydot to convert the graph to DOT format
+		dot = nx.drawing.nx_pydot.to_pydot(graph).to_string()
+		
+		# Clean up extraneous vertices
+		# (These are presumably caused by using Windows file paths as vertex names)
+		dot = re.sub('^C;$', '', dot, flags = re.MULTILINE)
+		while '\n\n' in dot:
+			dot = dot.replace('\n\n', '\n')
+		
+		# Convert backslashes to forward slashes to avoid confusing GraphViz
+		dot = dot.replace('\\\\', '/').replace('\\', '/')
+		
+		# Write the DOT to the specified output file
+		FileIO.writeFile(outfile, dot)
 
 
 def graph():
@@ -129,6 +150,7 @@ def graph():
 	# Our supported command-line arguments
 	parser = argparse.ArgumentParser(prog='{} trace'.format(sys.argv[0]), prefix_chars='-/')
 	parser.add_argument('module', help='EXE file for which the LoadLibrary() call hierarchy should be inspected')
+	parser.add_argument('-outfile', default=None, help='Generate a GraphViz DOT file representing the call graph')
 	
 	# If no command-line arguments were supplied, display the help message and exit
 	if len(sys.argv) < 2:
@@ -173,7 +195,10 @@ def graph():
 		# Print a pretty summary
 		GraphHelpers.printSummary(graph)
 		
-		# TODO: dump to GraphViz dot format?
+		# Dump the graph to a GraphViz DOT file if an output filename was specified
+		if args.outfile is not None:
+			print('Writing GraphViz DOT representation to "{}"...'.format(args.outfile), flush=True)
+			GraphHelpers.writeToFile(graph, args.outfile)
 		
 	except RuntimeError as e:
 		print('Error: {}'.format(e))
