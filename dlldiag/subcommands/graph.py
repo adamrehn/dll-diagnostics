@@ -44,6 +44,30 @@ class GraphHelpers(object):
 		return None
 	
 	@staticmethod
+	def formatFunctionName(entry):
+		'''
+		Formats a function name for pretty-printing
+		'''
+		return colored(entry['function'], color='yellow')
+	
+	@staticmethod
+	def formatReturnValue(entry):
+		'''
+		Formats a function call's return value for pretty-printing
+		'''
+		if entry['error']['code'] == 0 and entry['result'] != 'NULL':
+			return colored(entry['result'], color='green')
+		else:
+			return colored(entry['error']['message'].strip(), color='red')
+	
+	@staticmethod
+	def formatFlags(flags):
+		'''
+		Formats a set of flags for pretty-printing
+		'''
+		return ' | '.join([colored(f, color='yellow') for f in flags])
+	
+	@staticmethod
 	def constructGraph(logEntries):
 		'''
 		Constructs a directed graph from the supplied list of log entries
@@ -74,15 +98,23 @@ class GraphHelpers(object):
 				
 				# Create a vertex for the calling module if we don't already have one
 				if entry['module'] not in graph:
-					graph.add_node(entry['module'])
+					graph.add_node(entry['module'], non_loadlibrary_calls=[])
 				
-				# Create a vertex for the module resolved by the LoadLibrary() call if we don't already have one
-				# (Note that this will create a vertex called "NULL" that all failed calls will have outbound edges pointing to)
-				if entry['result'] not in graph:
-					graph.add_node(entry['result'])
-				
-				# Create an edge between the calling module vertex and the resolved module vertex, annotated with the call details
-				graph.add_edge(entry['module'], entry['result'], details=entry)
+				# Determine if this is a LoadLibrary function call
+				if entry['function'].startswith('LoadLibrary'):
+					
+					# Create a vertex for the module resolved by the LoadLibrary() call if we don't already have one
+					# (Note that this will create a vertex called "NULL" that all failed calls will have outbound edges pointing to)
+					if entry['result'] not in graph:
+						graph.add_node(entry['result'], non_loadlibrary_calls=[])
+					
+					# Create an edge between the calling module vertex and the resolved module vertex, annotated with the call details
+					graph.add_edge(entry['module'], entry['result'], details=entry)
+					
+				else:
+					
+					# For all other function calls, just add an entry to the list in the metadata for the vertex
+					nx.get_node_attributes(graph, 'non_loadlibrary_calls')[entry['module']].append(entry)
 				
 			else:
 				raise RuntimeError('unsupported log entry type "{}"!'.format(entry['type']))
@@ -90,7 +122,7 @@ class GraphHelpers(object):
 		return graph
 	
 	@staticmethod
-	def printSummary(graph):
+	def printSummary(graph, extendedDetails):
 		'''
 		Prints a summary of the supplied call hierarchy graph
 		'''
@@ -105,25 +137,68 @@ class GraphHelpers(object):
 			# Print the module name
 			print('{}:'.format(colored(vertex, color='cyan')))
 			
+			# If we are displaying extended details then print the details of the module's calls that are not LoadLibrary calls
+			if extendedDetails == True:
+				
+				# Keep track of the cookie values used by AddDllDirectory() and RemoveDllDirectory()
+				cookies = {}
+				
+				# Iterate over the non-LoadLibrary calls
+				calls = nx.get_node_attributes(graph, 'non_loadlibrary_calls')[vertex]
+				for call in calls:
+					
+					# Determine which function we are dealing with, since we pretty print them with different formats
+					if call['function'] == 'SetDefaultDllDirectories':
+						print('    {} [{}] -> {}'.format(
+							GraphHelpers.formatFunctionName(call),
+							GraphHelpers.formatFlags(call['arguments'][0]),
+							GraphHelpers.formatReturnValue(call)
+						))
+					
+					elif call['function'] in ['SetDllDirectoryA', 'SetDllDirectoryW']:
+						print('    {} "{}" -> {}'.format(
+							GraphHelpers.formatFunctionName(call),
+							call['arguments'][0],
+							GraphHelpers.formatReturnValue(call)
+						))
+						
+					elif call['function'] == 'AddDllDirectory':
+						
+						# Add the returned cookie to our list
+						cookies[call['result']] = call['arguments'][0]
+						
+						print('    {} "{}" -> {}'.format(
+							GraphHelpers.formatFunctionName(call),
+							call['arguments'][0],
+							GraphHelpers.formatReturnValue(call)
+						))
+					
+					elif call['function'] == 'RemoveDllDirectory':
+						
+						# Retrieve the passed cookie from our list
+						cookie = cookies.get(call['arguments'][0], '<UNKNOWN>')
+						
+						print('    {} {} ("{}") -> {}'.format(
+							GraphHelpers.formatFunctionName(call),
+							call['arguments'][0],
+							cookie,
+							GraphHelpers.formatReturnValue(call)
+						))
+			
 			# Iterate over the edges for the module's LoadLibrary() calls
 			edges = graph[vertex].items()
 			if len(edges) == 0:
 				print('    This module did not load any libraries.')
 			else:
-				for edge, attributes in edges:
-					
-					# Determine whether the call succeeded
-					details = attributes['details']
-					if details['error']['code'] == 0 and details['result'] != 'NULL':
-						result = colored(details['result'], color='green')
-					else:
-						result = colored(details['error']['message'].strip(), color='red')
+				for _, attributes in edges:
 					
 					# Print the call details with pretty formatting
-					print('    {} "{}" -> {}'.format(
-						colored(details['function'], color='yellow'),
+					details = attributes['details']
+					print('    {} "{}"{} -> {}'.format(
+						GraphHelpers.formatFunctionName(details),
 						details['arguments'][0],
-						result
+						' [{}]'.format(GraphHelpers.formatFlags(details['arguments'][2])) if extendedDetails == True and details['function'].startswith('LoadLibraryEx') else '',
+						GraphHelpers.formatReturnValue(details)
 					))
 			
 			# Print a blank line after each module's call list
@@ -157,6 +232,8 @@ def graph():
 	parser = argparse.ArgumentParser(prog='{} trace'.format(sys.argv[0]), prefix_chars='-/')
 	parser.add_argument('module', help='EXE file for which the LoadLibrary() call hierarchy should be inspected')
 	parser.add_argument('-outfile', default=None, help='Generate a GraphViz DOT file representing the call graph')
+	parser.add_argument('--output', '/OUTPUT', action='store_true', help='Print the stdout and stderr output generated by running the EXE file')
+	parser.add_argument('--extended', '/EXTENDED', action='store_true', help='Display extended information about DLL search parameters')
 	
 	# If no command-line arguments were supplied, display the help message and exit
 	if len(sys.argv) < 2:
@@ -191,7 +268,8 @@ def graph():
 		try:
 			print('Running executable {} with arguments {} and instrumenting all LoadLibrary() calls...\n'.format(args.module, run_args), flush=True)
 			detour = DetourLibrary(architecture, 'loadlibrary')
-			logEntries = detour.run(args.module, run_args).log
+			result = detour.run(args.module, run_args)
+			logEntries = result.log
 		except:
 			raise RuntimeError('failed to run instrumented executable!')
 		
@@ -199,12 +277,19 @@ def graph():
 		graph = GraphHelpers.constructGraph(logEntries)
 		
 		# Print a pretty summary
-		GraphHelpers.printSummary(graph)
+		GraphHelpers.printSummary(graph, args.extended)
 		
 		# Dump the graph to a GraphViz DOT file if an output filename was specified
 		if args.outfile is not None:
 			print('Writing GraphViz DOT representation to "{}"...'.format(args.outfile), flush=True)
 			GraphHelpers.writeToFile(graph, args.outfile)
+		
+		# Print the stdout and stderr from the executable if requested
+		if args.output == True:
+			print(colored('\nApplication stdout:', color='cyan'))
+			print(result.stdout)
+			print(colored('\nApplication stderr:', color='cyan'))
+			print(result.stderr)
 		
 	except RuntimeError as e:
 		print('Error: {}'.format(e))

@@ -8,7 +8,6 @@ def deps():
 	parser = argparse.ArgumentParser(prog='{} deps'.format(sys.argv[0]))
 	parser.add_argument('module', help='DLL or EXE file for which direct dependencies will be loaded')
 	parser.add_argument('--show', choices=['all', 'delayload', 'no-delayload'], default='all', help='Which type of dependencies to show')
-
 	
 	# If no command-line arguments were supplied, display the help message and exit
 	if len(sys.argv) < 2:
