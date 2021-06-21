@@ -315,7 +315,7 @@ FARPROC WINAPI Interposed_GetProcAddress(HMODULE hModule, LPCSTR lpProcName)
 		if (module == "C:\\WINDOWS\\System32\\KERNEL32.DLL" || module == "C:\\WINDOWS\\System32\\KERNELBASE.dll")
 		{
 			string symbol = string(lpProcName);
-			#define REDIRECT(f) if (symbol == #f) { return (FARPROC)(&Real_##f);}
+			#define REDIRECT(f) if (symbol == #f) { return (FARPROC)(&Interposed_##f);}
 			REDIRECT(LoadLibraryA);
 			REDIRECT(LoadLibraryW);
 			REDIRECT(LoadLibraryExA);
