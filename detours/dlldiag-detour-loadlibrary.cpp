@@ -32,6 +32,10 @@ extern "C"
 	BOOL (WINAPI *Real_SetDllDirectoryW)(LPCWSTR lpPathName) = SetDllDirectoryW;
 	DLL_DIRECTORY_COOKIE (WINAPI *Real_AddDllDirectory)(PCWSTR NewDirectory) = AddDllDirectory;
 	BOOL (WINAPI *Real_RemoveDllDirectory)(DLL_DIRECTORY_COOKIE Cookie) = RemoveDllDirectory;
+	
+	// We instrument GetProcAddress() as well since AddDllDirectory and RemoveDllDirectory are typically
+	// retrieved programmatically by code that maintains compatibility with older versions of Windows
+	FARPROC (WINAPI *Real_GetProcAddress)(HMODULE hModule, LPCSTR lpProcName) = GetProcAddress;
 }
 
 // Helper macros to reduce logging boilerplate
@@ -299,6 +303,36 @@ BOOL WINAPI Interposed_RemoveDllDirectory(DLL_DIRECTORY_COOKIE Cookie)
 	return result;
 }
 
+// The interposed version of GetProcAddress
+FARPROC WINAPI Interposed_GetProcAddress(HMODULE hModule, LPCSTR lpProcName)
+{
+	// Determine whether the specified symbol name is a string or an ordinal value
+	// (HIWORD() logic adapted from: <https://stackoverflow.com/a/16884408>)
+	if (HIWORD(lpProcName))
+	{
+		// If any of our instrumented functions are being requested then redirect to the instrumented version
+		string module = GetModuleName(hModule);
+		if (module == "C:\\WINDOWS\\System32\\KERNEL32.DLL" || module == "C:\\WINDOWS\\System32\\KERNELBASE.dll")
+		{
+			string symbol = string(lpProcName);
+			#define REDIRECT(f) if (symbol == #f) { return (FARPROC)(&Real_##f);}
+			REDIRECT(LoadLibraryA);
+			REDIRECT(LoadLibraryW);
+			REDIRECT(LoadLibraryExA);
+			REDIRECT(LoadLibraryExW);
+			REDIRECT(SetDefaultDllDirectories);
+			REDIRECT(SetDllDirectoryA);
+			REDIRECT(SetDllDirectoryW);
+			REDIRECT(AddDllDirectory);
+			REDIRECT(RemoveDllDirectory);
+			#undef REDIRECT
+		}
+	}
+	
+	// Invoke the real GetProcAddress
+	return Real_GetProcAddress(hModule, lpProcName);
+}
+
 // Helper macros for attaching and detaching Windows API functions
 #define ATTACH(f) DetourAttach(&(PVOID&)Real_##f,Interposed_##f)
 #define DETACH(f) DetourDetach(&(PVOID&)Real_##f,Interposed_##f)
@@ -313,6 +347,15 @@ BOOL APIENTRY DllMain(HINSTANCE hModule, DWORD dwReason, PVOID lpReserved)
 	if (dwReason == DLL_PROCESS_ATTACH)
 	{
 		DetourRestoreAfterWith();
+		
+		// Attempt to retrieve the path to our log file from the environment
+		string logFile = GetEnvVar("DLLDIAG_DETOUR_LOADLIBRARY_LOGFILE");
+		if (logFile.length() > 0)
+		{
+			// Attempt to open our log file
+			outputLog.reset(new ThreadSafeLog(logFile));
+		}
+		
 		DetourTransactionBegin();
 		DetourUpdateThread(GetCurrentThread());
 		ATTACH(LoadLibraryA);
@@ -324,18 +367,14 @@ BOOL APIENTRY DllMain(HINSTANCE hModule, DWORD dwReason, PVOID lpReserved)
 		ATTACH(SetDllDirectoryW);
 		ATTACH(AddDllDirectory);
 		ATTACH(RemoveDllDirectory);
+		ATTACH(GetProcAddress);
 		DetourTransactionCommit();
-		
-		// Attempt to retrieve the path to our log file from the environment
-		string logFile = GetEnvVar("DLLDIAG_DETOUR_LOADLIBRARY_LOGFILE");
-		if (logFile.length() > 0)
-		{
-			// Attempt to open our log file
-			outputLog.reset(new ThreadSafeLog(logFile));
-		}
 	}
 	else if (dwReason == DLL_PROCESS_DETACH)
 	{
+		// Close our log file
+		outputLog.reset(nullptr);
+		
 		DetourTransactionBegin();
 		DetourUpdateThread(GetCurrentThread());
 		DETACH(LoadLibraryA);
@@ -347,10 +386,8 @@ BOOL APIENTRY DllMain(HINSTANCE hModule, DWORD dwReason, PVOID lpReserved)
 		DETACH(SetDllDirectoryW);
 		DETACH(AddDllDirectory);
 		DETACH(RemoveDllDirectory);
+		DETACH(GetProcAddress);
 		DetourTransactionCommit();
-		
-		// Close our log file
-		outputLog.reset(nullptr);
 	}
 	
 	return TRUE;
