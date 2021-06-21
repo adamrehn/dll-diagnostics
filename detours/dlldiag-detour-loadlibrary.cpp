@@ -311,22 +311,18 @@ FARPROC WINAPI Interposed_GetProcAddress(HMODULE hModule, LPCSTR lpProcName)
 	if (HIWORD(lpProcName))
 	{
 		// If any of our instrumented functions are being requested then redirect to the instrumented version
-		string module = GetModuleName(hModule);
-		if (module == "C:\\WINDOWS\\System32\\KERNEL32.DLL" || module == "C:\\WINDOWS\\System32\\KERNELBASE.dll")
-		{
-			string symbol = string(lpProcName);
-			#define REDIRECT(f) if (symbol == #f) { return (FARPROC)(&Interposed_##f);}
-			REDIRECT(LoadLibraryA);
-			REDIRECT(LoadLibraryW);
-			REDIRECT(LoadLibraryExA);
-			REDIRECT(LoadLibraryExW);
-			REDIRECT(SetDefaultDllDirectories);
-			REDIRECT(SetDllDirectoryA);
-			REDIRECT(SetDllDirectoryW);
-			REDIRECT(AddDllDirectory);
-			REDIRECT(RemoveDllDirectory);
-			#undef REDIRECT
-		}
+		string symbol = string(lpProcName);
+		#define REDIRECT(f) if (symbol == #f) { return (FARPROC)(&Interposed_##f);}
+		REDIRECT(LoadLibraryA);
+		REDIRECT(LoadLibraryW);
+		REDIRECT(LoadLibraryExA);
+		REDIRECT(LoadLibraryExW);
+		REDIRECT(SetDefaultDllDirectories);
+		REDIRECT(SetDllDirectoryA);
+		REDIRECT(SetDllDirectoryW);
+		REDIRECT(AddDllDirectory);
+		REDIRECT(RemoveDllDirectory);
+		#undef REDIRECT
 	}
 	
 	// Invoke the real GetProcAddress
