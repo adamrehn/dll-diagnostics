@@ -51,11 +51,12 @@ class GraphHelpers(object):
 		return colored(entry['function'], color='yellow')
 	
 	@staticmethod
-	def formatReturnValue(entry):
+	def formatReturnValue(entry, successCondition=None):
 		'''
 		Formats a function call's return value for pretty-printing
 		'''
-		if entry['error']['code'] == 0 and entry['result'] != 'NULL':
+		success = successCondition(entry) if successCondition is not None else False
+		if success == True or entry['error']['code'] == 0:
 			return colored(entry['result'], color='green')
 		else:
 			return colored(entry['error']['message'].strip(), color='red')
@@ -198,7 +199,7 @@ class GraphHelpers(object):
 						GraphHelpers.formatFunctionName(details),
 						details['arguments'][0],
 						' [{}]'.format(GraphHelpers.formatFlags(details['arguments'][2])) if extendedDetails == True and details['function'].startswith('LoadLibraryEx') else '',
-						GraphHelpers.formatReturnValue(details)
+						GraphHelpers.formatReturnValue(details, successCondition = lambda e: e['result'] != 'NULL')
 					))
 			
 			# Print a blank line after each module's call list
