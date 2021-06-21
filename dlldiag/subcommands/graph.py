@@ -35,10 +35,10 @@ class GraphHelpers(object):
 		'''
 		Attempts to find the last entry in the supplied list that matches the hash of the specified entry
 		'''
-		for candidate in reversed(candidates):
+		for index in range(len(candidates) - 1, -1, -1):
+			candidate = candidates[index]
 			if GraphHelpers.entriesMatch(candidate, entry):
-				candidates.remove(candidate)
-				return candidate
+				return candidates.pop(index)
 		
 		# No match found
 		return None
@@ -74,8 +74,8 @@ class GraphHelpers(object):
 		Constructs a directed graph from the supplied list of log entries
 		'''
 		
-		# Create a new directed graph
-		graph = nx.OrderedDiGraph()
+		# Create a new directed graph with support for parallel edges
+		graph = nx.OrderedMultiDiGraph()
 		
 		# Maintain a list of function calls for which we've not yet seen a return value
 		pending = []
@@ -119,6 +119,11 @@ class GraphHelpers(object):
 				
 			else:
 				raise RuntimeError('unsupported log entry type "{}"!'.format(entry['type']))
+		
+		# Print a warning if there were any function calls for which we did not encounter a return value
+		if len(pending) > 0:
+			for entry in pending:
+				OutputFormatting.printWarning('return value not found for function call: {}'.format(entry))
 		
 		return graph
 	
@@ -187,20 +192,21 @@ class GraphHelpers(object):
 						))
 			
 			# Iterate over the edges for the module's LoadLibrary() calls
-			edges = graph[vertex].items()
-			if len(edges) == 0:
+			neighbours = graph[vertex]
+			if len(neighbours) == 0:
 				print('    This module did not load any libraries.')
 			else:
-				for _, attributes in edges:
-					
-					# Print the call details with pretty formatting
-					details = attributes['details']
-					print('    {} "{}"{} -> {}'.format(
-						GraphHelpers.formatFunctionName(details),
-						details['arguments'][0],
-						' [{}]'.format(GraphHelpers.formatFlags(details['arguments'][2])) if extendedDetails == True and details['function'].startswith('LoadLibraryEx') else '',
-						GraphHelpers.formatReturnValue(details, successCondition = lambda e: e['result'] != 'NULL')
-					))
+				for _, edges in neighbours.items():
+					for _, edge in edges.items():
+						
+						# Print the call details with pretty formatting
+						details = edge['details']
+						print('    {} "{}"{} -> {}'.format(
+							GraphHelpers.formatFunctionName(details),
+							details['arguments'][0],
+							' [{}]'.format(GraphHelpers.formatFlags(details['arguments'][2])) if extendedDetails == True and details['function'].startswith('LoadLibraryEx') else '',
+							GraphHelpers.formatReturnValue(details, successCondition = lambda e: e['result'] != 'NULL')
+						))
 			
 			# Print a blank line after each module's call list
 			print()
