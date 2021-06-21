@@ -47,6 +47,11 @@ string FormatError(DWORD error)
 
 string UnicodeToUTF8(LPCWSTR unicodeStr)
 {
+	// Don't attempt to convert the string if a null pointer was supplied
+	if (unicodeStr == nullptr) {
+		return string("<NULL>");
+	}
+	
 	// Determine the required buffer size to store the converted string
 	int bufsize = WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS, unicodeStr, -1, nullptr, 0, nullptr, nullptr);
 	if (bufsize > 0)
