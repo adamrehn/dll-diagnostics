@@ -45,20 +45,25 @@ string FormatError(DWORD error)
 	return result;
 }
 
-string UnicodeToUTF8(LPCWSTR unicodeStr)
+string UnicodeToUTF8(LPCWSTR unicodeStr, int length)
 {
 	// Don't attempt to convert the string if a null pointer was supplied
 	if (unicodeStr == nullptr) {
 		return string("<NULL>");
 	}
 	
+	// Don't attempt to convert the string if an empty buffer was supplied
+	if (length == 0) {
+		return string("");
+	}
+	
 	// Determine the required buffer size to store the converted string
-	int bufsize = WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS, unicodeStr, -1, nullptr, 0, nullptr, nullptr);
+	int bufsize = WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS, unicodeStr, length, nullptr, 0, nullptr, nullptr);
 	if (bufsize > 0)
 	{
 		// Allocate the buffer and attempt to perform the conversion
 		string buffer = string(bufsize, 0);
-		if (WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS, unicodeStr, -1, (LPSTR)(buffer.data()), bufsize, nullptr, nullptr) != 0)
+		if (WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS, unicodeStr, length, (LPSTR)(buffer.data()), bufsize, nullptr, nullptr) != 0)
 		{
 			// Remove the trailing null terminating character from the result
 			buffer.pop_back();

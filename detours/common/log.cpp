@@ -22,6 +22,13 @@ bool ThreadSafeLog::Write(const std::string& message)
 	// Lock the mutex
 	std::lock_guard<std::mutex> lock(this->mutex);
 	
+	// If we have any buffered messages then flush them
+	if (this->deferred.empty() == false)
+	{
+		this->outfile.write(this->deferred.c_str(), this->deferred.length());
+		this->deferred = "";
+	}
+	
 	// Attempt to perform the write
 	this->outfile.write(message.c_str(), message.length());
 	this->outfile.flush();
@@ -30,4 +37,17 @@ bool ThreadSafeLog::Write(const std::string& message)
 
 bool ThreadSafeLog::WriteJson(const json& object) {
 	return this->Write(object.dump() + "\n");
+}
+
+void ThreadSafeLog::WriteDeferred(const std::string& message)
+{
+	// Lock the mutex
+	std::lock_guard<std::mutex> lock(this->mutex);
+	
+	// Append the message to our buffer of deferred writes
+	this->deferred += message;
+}
+
+void ThreadSafeLog::WriteJsonDeferred(const json& object) {
+	this->WriteDeferred(object.dump() + "\n");
 }

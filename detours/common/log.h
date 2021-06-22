@@ -25,6 +25,14 @@ class ThreadSafeLog
 		// Writes a JSON message to the log file
 		bool WriteJson(const json& object);
 		
+		// Enqueues a message to be written to the log file
+		// when the next non-deferred write is performed
+		void WriteDeferred(const std::string& message);
+		
+		// Enqueues a JSON message to be written to the log file
+		// when the next non-deferred write is performed
+		void WriteJsonDeferred(const json& object);
+		
 	private:
 		
 		// The output stream for the log file
@@ -32,4 +40,7 @@ class ThreadSafeLog
 		
 		// The mutex that prevents concurrent writes to the log file
 		std::mutex mutex;
+		
+		// The buffer of deferred writes
+		std::string deferred;
 };

@@ -2,10 +2,16 @@
 #include "common/environment.h"
 #include "common/log.h"
 #include "common/strings.h"
+
 #include <Windows.h>
+#include <WinNT.h>
+#include <subauth.h>
+
 #include <detours.h>
+
 #include <stdlib.h>
 #include <time.h>
+#include <algorithm>
 #include <memory>
 #include <string>
 #include <vector>
@@ -40,6 +46,11 @@ extern "C"
 	FARPROC (WINAPI *Real_GetProcAddress)(HMODULE hModule, LPCSTR lpProcName) = GetProcAddress;
 }
 
+// Function pointer type and function pointer for the undocumented LdrLoadDll() function
+typedef NTSTATUS (NTAPI *Ptr_LdrLoadDll)(PWSTR SearchPath, PULONG DllCharacteristics, PUNICODE_STRING DllName, PVOID* BaseAddress);
+static Ptr_LdrLoadDll Real_LdrLoadDll = nullptr;
+HMODULE ntdll = nullptr;
+
 // Helper macro for wrapping code in a __try/__except block for catching structured exceptions
 #define SEH_GUARD(code) [&]() { __try { ##code } __except(EXCEPTION_EXECUTE_HANDLER) {} }();
 
@@ -50,13 +61,13 @@ extern "C"
 	{"module",          GetCallerModule(_ReturnAddress())}, \
 	{"thread",          GetCurrentThreadId()}
 
-#define LOG_FUNCTION_ENTRY() if (outputLog) \
+#define LOG_FUNCTION_ENTRY_IMP(writeCall) if (outputLog) \
 { \
 	log["type"] = "enter"; \
-	outputLog->WriteJson(log); \
+	outputLog->##writeCall(log); \
 }
 
-#define LOG_FUNCTION_RESULT(transform) if (outputLog) \
+#define LOG_FUNCTION_RESULT_IMP(transform, writeCall) if (outputLog) \
 { \
 	log["type"] = "return"; \
 	log["timestamp_end"] = GetTimestamp(); \
@@ -65,8 +76,13 @@ extern "C"
 		{"code",    error}, \
 		{"message", FormatError(error)} \
 	}; \
-	outputLog->WriteJson(log); \
+	outputLog->##writeCall(log); \
 }
+
+#define LOG_FUNCTION_ENTRY() LOG_FUNCTION_ENTRY_IMP(WriteJson)
+#define LOG_FUNCTION_RESULT(transform) LOG_FUNCTION_RESULT_IMP(transform, WriteJson)
+#define LOG_FUNCTION_ENTRY_DEFERRED() LOG_FUNCTION_ENTRY_IMP(WriteJsonDeferred)
+#define LOG_FUNCTION_RESULT_DEFERRED(transform) LOG_FUNCTION_RESULT_IMP(transform, WriteJsonDeferred)
 
 // Helper macro for the flag parsing functions below
 #define IDENTIFY_FLAG(flag) if (dwFlags & flag) { flags.push_back(#flag); }
@@ -362,6 +378,49 @@ FARPROC WINAPI Interposed_GetProcAddress(HMODULE hModule, LPCSTR lpProcName)
 	return Real_GetProcAddress(hModule, lpProcName);
 }
 
+// The interposed version of LdrLoadDll
+NTSTATUS NTAPI Interposed_LdrLoadDll(PWSTR SearchPath, PULONG DllCharacteristics, PUNICODE_STRING DllName, PVOID* BaseAddress)
+{
+	// Invoke the real LdrLoadDll
+	NTSTATUS result = 0;
+	SEH_GUARD(
+		result = Real_LdrLoadDll(SearchPath, DllCharacteristics, DllName, BaseAddress);
+	)
+	DWORD error = GetLastError();
+	
+	// Capture a stack strace
+	const ULONG maxFrames = 63;
+	void* frames[maxFrames];
+	USHORT numFrames = CaptureStackBackTrace(1, maxFrames, frames, nullptr);
+	
+	// Retrieve the module for each frame in the stack trace
+	vector<string> modules;
+	for (USHORT index = 0; index < numFrames; ++index) {
+		modules.push_back(GetCallerModule(frames[index]));
+	}
+	
+	// If we have instrumented the parent function that called LdrLoadDll() then we don't need to log anything
+	string module = GetCallerModule(&Interposed_LdrLoadDll);
+	if (std::find(modules.begin(), modules.end(), module) != modules.end()) {
+		return result;
+	}
+	
+	// Construct a JSON object for logging
+	json log = {
+		COMMON_LOG_FIELDS,
+		{"function",  "LdrLoadDll"},
+		{"arguments", { UnicodeToUTF8(DllName->Buffer) }},
+		{"resolved",  GetCallerModule(BaseAddress)},
+		{"stack",     modules}
+	};
+	
+	// Log the start of the call and the result of the call
+	LOG_FUNCTION_ENTRY_DEFERRED();
+	LOG_FUNCTION_RESULT_DEFERRED(uint64_t);
+	
+	return result;
+}
+
 // Helper macros for attaching and detaching Windows API functions
 #define ATTACH(f) DetourAttach(&(PVOID&)Real_##f,Interposed_##f)
 #define DETACH(f) DetourDetach(&(PVOID&)Real_##f,Interposed_##f)
@@ -376,6 +435,16 @@ BOOL APIENTRY DllMain(HINSTANCE hModule, DWORD dwReason, PVOID lpReserved)
 	if (dwReason == DLL_PROCESS_ATTACH)
 	{
 		DetourRestoreAfterWith();
+		
+		// Attempt to load ntdll.dll
+		if (ntdll == nullptr) {
+			ntdll = Real_LoadLibraryExW(L"ntdll.dll", nullptr, LOAD_LIBRARY_SEARCH_SYSTEM32);
+		}
+		
+		// Attempt to retrieve the function pointer for the LdrLoadDll() function
+		if (ntdll != nullptr && Real_LdrLoadDll == nullptr) {
+			Real_LdrLoadDll = (Ptr_LdrLoadDll)(GetProcAddress(ntdll, "LdrLoadDll"));
+		}
 		
 		// Seed the random number generator
 		srand((unsigned int)(time(nullptr)));
@@ -400,13 +469,13 @@ BOOL APIENTRY DllMain(HINSTANCE hModule, DWORD dwReason, PVOID lpReserved)
 		ATTACH(AddDllDirectory);
 		ATTACH(RemoveDllDirectory);
 		ATTACH(GetProcAddress);
+		if (Real_LdrLoadDll != nullptr) {
+			ATTACH(LdrLoadDll);
+		}
 		DetourTransactionCommit();
 	}
 	else if (dwReason == DLL_PROCESS_DETACH)
 	{
-		// Close our log file
-		outputLog.reset(nullptr);
-		
 		DetourTransactionBegin();
 		DetourUpdateThread(GetCurrentThread());
 		DETACH(LoadLibraryA);
@@ -419,7 +488,26 @@ BOOL APIENTRY DllMain(HINSTANCE hModule, DWORD dwReason, PVOID lpReserved)
 		DETACH(AddDllDirectory);
 		DETACH(RemoveDllDirectory);
 		DETACH(GetProcAddress);
+		if (Real_LdrLoadDll != nullptr) {
+			DETACH(LdrLoadDll);
+		}
 		DetourTransactionCommit();
+		
+		// Close our log file, flushing any remaining buffered messages
+		outputLog->Write("");
+		outputLog.reset(nullptr);
+		
+		// Unload ntdll.dll
+		if (ntdll != nullptr)
+		{
+			FreeLibrary(ntdll);
+			ntdll = nullptr;
+			
+			// Reset the function pointer for the LdrLoadDll() function
+			if (Real_LdrLoadDll != nullptr) {
+				Real_LdrLoadDll = nullptr;
+			}
+		}
 	}
 	
 	return TRUE;
