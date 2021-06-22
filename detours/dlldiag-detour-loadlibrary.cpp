@@ -4,6 +4,8 @@
 #include "common/strings.h"
 #include <Windows.h>
 #include <detours.h>
+#include <stdlib.h>
+#include <time.h>
 #include <memory>
 #include <string>
 #include <vector>
@@ -40,6 +42,7 @@ extern "C"
 
 // Helper macros to reduce logging boilerplate
 #define COMMON_LOG_FIELDS \
+	{"random",          rand()}, \
 	{"timestamp_start", GetTimestamp()}, \
 	{"module",          GetCallerModule(_ReturnAddress())}, \
 	{"thread",          GetCurrentThreadId()}
@@ -343,6 +346,9 @@ BOOL APIENTRY DllMain(HINSTANCE hModule, DWORD dwReason, PVOID lpReserved)
 	if (dwReason == DLL_PROCESS_ATTACH)
 	{
 		DetourRestoreAfterWith();
+		
+		// Seed the random number generator
+		srand(time(nullptr));
 		
 		// Attempt to retrieve the path to our log file from the environment
 		string logFile = GetEnvVar("DLLDIAG_DETOUR_LOADLIBRARY_LOGFILE");

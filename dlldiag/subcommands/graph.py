@@ -17,7 +17,7 @@ class GraphHelpers(object):
 		
 		# Extract the common fields and copy them into a new dictionary
 		subset = {}
-		for field in ['timestamp_start', 'module', 'thread', 'function', 'arguments']:
+		for field in ['random', 'timestamp_start', 'module', 'thread', 'function', 'arguments']:
 			subset[field] = entry[field]
 		
 		# Dump the dictionary to a JSON string and hash it
