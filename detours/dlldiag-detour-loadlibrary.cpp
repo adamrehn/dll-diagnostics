@@ -40,6 +40,9 @@ extern "C"
 	FARPROC (WINAPI *Real_GetProcAddress)(HMODULE hModule, LPCSTR lpProcName) = GetProcAddress;
 }
 
+// Helper macro for wrapping code in a __try/__except block for catching structured exceptions
+#define SEH_GUARD(code) [&]() { __try { ##code } __except(EXCEPTION_EXECUTE_HANDLER) {} }();
+
 // Helper macros to reduce logging boilerplate
 #define COMMON_LOG_FIELDS \
 	{"random",          rand()}, \
@@ -113,7 +116,10 @@ HMODULE WINAPI Interposed_LoadLibraryA(LPCSTR lpLibFileName)
 	LOG_FUNCTION_ENTRY();
 	
 	// Invoke the real LoadLibraryA
-	HMODULE result = Real_LoadLibraryA(lpLibFileName);
+	HMODULE result = nullptr;
+	SEH_GUARD(
+		result = Real_LoadLibraryA(lpLibFileName);
+	)
 	DWORD error = GetLastError();
 	
 	// Log the result of the call
@@ -136,7 +142,10 @@ HMODULE WINAPI Interposed_LoadLibraryW(LPCWSTR lpLibFileName)
 	LOG_FUNCTION_ENTRY();
 	
 	// Invoke the real LoadLibraryW
-	HMODULE result = Real_LoadLibraryW(lpLibFileName);
+	HMODULE result = nullptr;
+	SEH_GUARD(
+		result = Real_LoadLibraryW(lpLibFileName);
+	)
 	DWORD error = GetLastError();
 	
 	// Log the result of the call
@@ -159,7 +168,10 @@ HMODULE WINAPI Interposed_LoadLibraryExA(LPCSTR lpLibFileName, HANDLE hFile, DWO
 	LOG_FUNCTION_ENTRY();
 	
 	// Invoke the real LoadLibraryExA
-	HMODULE result = Real_LoadLibraryExA(lpLibFileName, hFile, dwFlags);
+	HMODULE result = nullptr;
+	SEH_GUARD(
+		result = Real_LoadLibraryExA(lpLibFileName, hFile, dwFlags);
+	)
 	DWORD error = GetLastError();
 	
 	// Log the result of the call
@@ -182,7 +194,10 @@ HMODULE WINAPI Interposed_LoadLibraryExW(LPCWSTR lpLibFileName, HANDLE hFile, DW
 	LOG_FUNCTION_ENTRY();
 	
 	// Invoke the real LoadLibraryExW
-	HMODULE result = Real_LoadLibraryExW(lpLibFileName, hFile, dwFlags);
+	HMODULE result = nullptr;
+	SEH_GUARD(
+		result = Real_LoadLibraryExW(lpLibFileName, hFile, dwFlags);
+	)
 	DWORD error = GetLastError();
 	
 	// Log the result of the call
@@ -205,7 +220,10 @@ BOOL WINAPI Interposed_SetDefaultDllDirectories(DWORD DirectoryFlags)
 	LOG_FUNCTION_ENTRY();
 	
 	// Invoke the real SetDefaultDllDirectories
-	BOOL result = Real_SetDefaultDllDirectories(DirectoryFlags);
+	BOOL result = FALSE;
+	SEH_GUARD(
+		result = Real_SetDefaultDllDirectories(DirectoryFlags);
+	)
 	DWORD error = GetLastError();
 	
 	// Log the result of the call
@@ -228,7 +246,10 @@ BOOL WINAPI Interposed_SetDllDirectoryA(LPCSTR lpPathName)
 	LOG_FUNCTION_ENTRY();
 	
 	// Invoke the real SetDllDirectoryA
-	BOOL result = Real_SetDllDirectoryA(lpPathName);
+	BOOL result = FALSE;
+	SEH_GUARD(
+		result = Real_SetDllDirectoryA(lpPathName);
+	)
 	DWORD error = GetLastError();
 	
 	// Log the result of the call
@@ -251,7 +272,10 @@ BOOL WINAPI Interposed_SetDllDirectoryW(LPCWSTR lpPathName)
 	LOG_FUNCTION_ENTRY();
 	
 	// Invoke the real SetDllDirectoryW
-	BOOL result = Real_SetDllDirectoryW(lpPathName);
+	BOOL result = FALSE;
+	SEH_GUARD(
+		result = Real_SetDllDirectoryW(lpPathName);
+	)
 	DWORD error = GetLastError();
 	
 	// Log the result of the call
@@ -274,7 +298,10 @@ DLL_DIRECTORY_COOKIE WINAPI Interposed_AddDllDirectory(PCWSTR NewDirectory)
 	LOG_FUNCTION_ENTRY();
 	
 	// Invoke the real AddDllDirectory
-	DLL_DIRECTORY_COOKIE result = Real_AddDllDirectory(NewDirectory);
+	DLL_DIRECTORY_COOKIE result = nullptr;
+	SEH_GUARD(
+		result = Real_AddDllDirectory(NewDirectory);
+	)
 	DWORD error = GetLastError();
 	
 	// Log the result of the call
@@ -297,7 +324,10 @@ BOOL WINAPI Interposed_RemoveDllDirectory(DLL_DIRECTORY_COOKIE Cookie)
 	LOG_FUNCTION_ENTRY();
 	
 	// Invoke the real RemoveDllDirectory
-	BOOL result = Real_RemoveDllDirectory(Cookie);
+	BOOL result = FALSE;
+	SEH_GUARD(
+		result = Real_RemoveDllDirectory(Cookie);
+	)
 	DWORD error = GetLastError();
 	
 	// Log the result of the call
@@ -348,7 +378,7 @@ BOOL APIENTRY DllMain(HINSTANCE hModule, DWORD dwReason, PVOID lpReserved)
 		DetourRestoreAfterWith();
 		
 		// Seed the random number generator
-		srand(time(nullptr));
+		srand((unsigned int)(time(nullptr)));
 		
 		// Attempt to retrieve the path to our log file from the environment
 		string logFile = GetEnvVar("DLLDIAG_DETOUR_LOADLIBRARY_LOGFILE");
