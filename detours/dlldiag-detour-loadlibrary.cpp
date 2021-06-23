@@ -9,6 +9,7 @@
 
 #include <detours.h>
 
+#include <math.h>
 #include <stdlib.h>
 #include <time.h>
 #include <algorithm>
@@ -46,9 +47,11 @@ extern "C"
 	FARPROC (WINAPI *Real_GetProcAddress)(HMODULE hModule, LPCSTR lpProcName) = GetProcAddress;
 }
 
-// Function pointer type and function pointer for the undocumented LdrLoadDll() function
+// Function pointer types and pointers for the LdrLoadDll and RtlNtStatusToDosError functions
 typedef NTSTATUS (NTAPI *Ptr_LdrLoadDll)(PWSTR SearchPath, PULONG DllCharacteristics, PUNICODE_STRING DllName, PVOID* BaseAddress);
+typedef ULONG (NTAPI *Ptr_RtlNtStatusToDosError)(NTSTATUS Status);
 static Ptr_LdrLoadDll Real_LdrLoadDll = nullptr;
+static Ptr_RtlNtStatusToDosError RtlNtStatusToDosError = nullptr;
 HMODULE ntdll = nullptr;
 
 // Helper macro for wrapping code in a __try/__except block for catching structured exceptions
@@ -391,12 +394,14 @@ FARPROC WINAPI Interposed_GetProcAddress(HMODULE hModule, LPCSTR lpProcName)
 NTSTATUS NTAPI Interposed_LdrLoadDll(PWSTR SearchPath, PULONG DllCharacteristics, PUNICODE_STRING DllName, PVOID* BaseAddress)
 {
 	// Invoke the real LdrLoadDll
-	NTSTATUS result = 0;
+	NTSTATUS status = 0;
 	SetLastError(0);
 	SEH_GUARD(
-		result = Real_LdrLoadDll(SearchPath, DllCharacteristics, DllName, BaseAddress);
+		status = Real_LdrLoadDll(SearchPath, DllCharacteristics, DllName, BaseAddress);
 	)
 	DWORD error = GetLastError();
+	DWORD statusError = (RtlNtStatusToDosError != nullptr) ? (DWORD)(RtlNtStatusToDosError(status)) : 0;
+	HMODULE result = (BaseAddress != nullptr) ? (HMODULE)(*BaseAddress) : nullptr;
 	
 	// Capture a stack strace
 	const ULONG maxFrames = 63;
@@ -412,23 +417,31 @@ NTSTATUS NTAPI Interposed_LdrLoadDll(PWSTR SearchPath, PULONG DllCharacteristics
 	// If we have instrumented the parent function that called LdrLoadDll() then we don't need to log anything
 	string module = GetCallerModule(&Interposed_LdrLoadDll);
 	if (std::find(modules.begin(), modules.end(), module) != modules.end()) {
-		return result;
+		return status;
 	}
+	
+	// Determine whether the buffer in the UNICODE_STRING struct is null-terminated
+	size_t numChars = (size_t)(ceil((double)(DllName->Length) / 2.0));
+	size_t bufSize = (size_t)(ceil((double)(DllName->MaximumLength) / 2.0));
+	bool isNullTerminated = (wcsnlen_s(DllName->Buffer, bufSize) == numChars);
 	
 	// Construct a JSON object for logging
 	json log = {
 		COMMON_LOG_FIELDS,
 		{"function",  "LdrLoadDll"},
-		{"arguments", { UnicodeToUTF8(DllName->Buffer) }},
-		{"resolved",  GetCallerModule(BaseAddress)},
-		{"stack",     modules}
+		{"arguments", { LoadLibraryExFlags((DWORD)SearchPath), UnicodeToUTF8(DllName->Buffer, isNullTerminated, numChars) }},
+		{"stack",     modules},
+		{"status", {
+			{"code",    statusError},
+			{"message", FormatError(statusError)}
+		}}
 	};
 	
 	// Log the start of the call and the result of the call
 	LOG_FUNCTION_ENTRY_DEFERRED();
-	LOG_FUNCTION_RESULT_DEFERRED(uint64_t);
+	LOG_FUNCTION_RESULT_DEFERRED(GetModuleName);
 	
-	return result;
+	return status;
 }
 
 // Helper macros for attaching and detaching Windows API functions
@@ -454,6 +467,11 @@ BOOL APIENTRY DllMain(HINSTANCE hModule, DWORD dwReason, PVOID lpReserved)
 		// Attempt to retrieve the function pointer for the LdrLoadDll() function
 		if (ntdll != nullptr && Real_LdrLoadDll == nullptr) {
 			Real_LdrLoadDll = (Ptr_LdrLoadDll)(GetProcAddress(ntdll, "LdrLoadDll"));
+		}
+		
+		// Attempt to retrieve the function pointer for the RtlNtStatusToDosError() function
+		if (ntdll != nullptr && RtlNtStatusToDosError == nullptr) {
+			RtlNtStatusToDosError = (Ptr_RtlNtStatusToDosError)(GetProcAddress(ntdll, "RtlNtStatusToDosError"));
 		}
 		
 		// Seed the random number generator
@@ -516,6 +534,11 @@ BOOL APIENTRY DllMain(HINSTANCE hModule, DWORD dwReason, PVOID lpReserved)
 			// Reset the function pointer for the LdrLoadDll() function
 			if (Real_LdrLoadDll != nullptr) {
 				Real_LdrLoadDll = nullptr;
+			}
+			
+			// Reset the function pointer for the RtlNtStatusToDosError() function
+			if (RtlNtStatusToDosError != nullptr) {
+				RtlNtStatusToDosError = nullptr;
 			}
 		}
 	}

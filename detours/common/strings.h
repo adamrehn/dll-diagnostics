@@ -9,4 +9,4 @@ std::string GetModuleName(HMODULE module);
 std::string FormatError(DWORD error);
 
 // Converts a UTF-16 encoded Unicode string into a UTF-8 encoded string
-std::string UnicodeToUTF8(LPCWSTR unicodeStr, int length = -1);
+std::string UnicodeToUTF8(LPCWSTR unicodeStr, bool isNullTerminated = true, int length = -1);

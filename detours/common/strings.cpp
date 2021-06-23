@@ -1,4 +1,6 @@
 #include "strings.h"
+#include <cstring>
+#include <memory>
 using std::string;
 using std::wstring;
 
@@ -45,25 +47,37 @@ string FormatError(DWORD error)
 	return result;
 }
 
-string UnicodeToUTF8(LPCWSTR unicodeStr, int length)
+string UnicodeToUTF8(LPCWSTR unicodeStr, bool isNullTerminated, int length)
 {
 	// Don't attempt to convert the string if a null pointer was supplied
 	if (unicodeStr == nullptr) {
 		return string("<NULL>");
 	}
 	
-	// Don't attempt to convert the string if an empty buffer was supplied
-	if (length == 0) {
+	// Don't attempt to convert the string if an empty buffer was supplied, or if the
+	// string is not null-terminated but no length value was provided
+	if (isNullTerminated == false && length <= 0) {
 		return string("");
 	}
 	
+	// If the input string is not null-terminated then append a null character
+	LPCWSTR toConvert = unicodeStr;
+	std::unique_ptr<WCHAR[]> appended = nullptr;
+	if (isNullTerminated == false)
+	{
+		appended.reset(new WCHAR[length + 1]);
+		memset(appended.get(), 0, (length + 1) * sizeof(WCHAR));
+		memcpy(appended.get(), unicodeStr, length * sizeof(WCHAR));
+		toConvert = appended.get();
+	}
+	
 	// Determine the required buffer size to store the converted string
-	int bufsize = WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS, unicodeStr, length, nullptr, 0, nullptr, nullptr);
+	int bufsize = WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS, toConvert, -1, nullptr, 0, nullptr, nullptr);
 	if (bufsize > 0)
 	{
 		// Allocate the buffer and attempt to perform the conversion
 		string buffer = string(bufsize, 0);
-		if (WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS, unicodeStr, length, (LPSTR)(buffer.data()), bufsize, nullptr, nullptr) != 0)
+		if (WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS, toConvert, -1, (LPSTR)(buffer.data()), bufsize, nullptr, nullptr) != 0)
 		{
 			// Remove the trailing null terminating character from the result
 			buffer.pop_back();

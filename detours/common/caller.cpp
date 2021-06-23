@@ -9,6 +9,11 @@ using std::string;
 // Attempts to retrieve the path to the module containing the caller function identified by the specified memory address
 string GetCallerModule(void* callerAddress)
 {
+	// Don't attempt to process the memory address if a null pointer was supplied
+	if (callerAddress == nullptr) {
+		return string("");
+	}
+	
 	// Attempt to retrieve a handle to the module that contains the caller's memory address
 	HMODULE callerModule = nullptr;
 	if (GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT, (LPCWSTR)callerAddress, &callerModule)) {
