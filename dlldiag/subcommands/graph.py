@@ -109,7 +109,7 @@ class GraphHelpers(object):
 				
 				# If this is a LdrLoadDll() call then examine the stack trace to determine the appropriate module to treat as the caller
 				if entry['function'] == 'LdrLoadDll':
-					candidates = [m for m in entry['stack'] if m not in ['C:\\WINDOWS\\System32\\KERNELBASE.dll', 'C:\\WINDOWS\\SYSTEM32\\ntdll.dll']]
+					candidates = [m for m in entry['stack'] if m.upper() not in ['C:\\WINDOWS\\SYSTEM32\\KERNELBASE.DLL', 'C:\\WINDOWS\\SYSTEM32\\NTDLL.DLL']]
 					if len(candidates) > 0:
 						entry['module'] = candidates[0]
 				
