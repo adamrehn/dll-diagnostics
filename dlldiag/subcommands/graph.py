@@ -1,5 +1,6 @@
 from ..common import DetourLibrary, FileIO, ModuleHeader, OutputFormatting
 import argparse, hashlib, json, os, re, sys
+from collections import OrderedDict
 from termcolor import colored
 import networkx as nx
 
@@ -55,11 +56,16 @@ class GraphHelpers(object):
 		'''
 		Formats a function call's return value for pretty-printing
 		'''
+		
+		# Evaluate the success condition (if supplied) and retrieve the appropriate error field for the function
 		success = successCondition(entry) if successCondition is not None else False
-		if success == True or entry['error']['code'] == 0:
+		error = entry['status'] if entry['function'] == 'LdrLoadDll' else entry['error']
+		
+		# Pretty-print the result upon success or the error upon failure
+		if success == True or error['code'] == 0:
 			return colored(entry['result'], color='green')
 		else:
-			return colored(entry['error']['message'].strip(), color='red')
+			return colored(error['message'].strip(), color='red')
 	
 	@staticmethod
 	def formatFlags(flags):
@@ -80,6 +86,10 @@ class GraphHelpers(object):
 		# Maintain a list of function calls for which we've not yet seen a return value
 		pending = []
 		
+		# Gather all LdrLoadDll() calls and process them last
+		loadDllEntries = list([e for e in logEntries if e['function'] == 'LdrLoadDll'])
+		logEntries = list([e for e in logEntries if e['function'] != 'LdrLoadDll']) + loadDllEntries
+		
 		# Process each log entry in turn
 		for entry in logEntries:
 			
@@ -97,12 +107,18 @@ class GraphHelpers(object):
 					OutputFormatting.printWarning('encountered a return value before the function call!')
 					continue
 				
+				# If this is a LdrLoadDll() call then examine the stack trace to determine the appropriate module to treat as the caller
+				if entry['function'] == 'LdrLoadDll':
+					candidates = [m for m in entry['stack'] if m not in ['C:\\WINDOWS\\System32\\KERNELBASE.dll', 'C:\\WINDOWS\\SYSTEM32\\ntdll.dll']]
+					if len(candidates) > 0:
+						entry['module'] = candidates[0]
+				
 				# Create a vertex for the calling module if we don't already have one
 				if entry['module'] not in graph:
 					graph.add_node(entry['module'], non_loadlibrary_calls=[])
 				
 				# Determine if this is a LoadLibrary function call
-				if entry['function'].startswith('LoadLibrary'):
+				if entry['function'].startswith('LoadLibrary') or entry['function'] == 'LdrLoadDll':
 					
 					# Create a vertex for the module resolved by the LoadLibrary() call if we don't already have one
 					# (Note that this will create a vertex called "NULL" that all failed calls will have outbound edges pointing to)
@@ -143,7 +159,10 @@ class GraphHelpers(object):
 			# Print the module name
 			print('{}:'.format(colored(vertex, color='cyan')))
 			
-			# If we are displaying extended details then print the details of the module's calls that are not LoadLibrary calls
+			# Gather the list of pretty-printed function calls so we can filter out duplicates
+			printed = []
+			
+			# If we are displaying extended details then print the details of the module's calls that are not LoadLibrary() calls
 			if extendedDetails == True:
 				
 				# Keep track of the cookie values used by AddDllDirectory() and RemoveDllDirectory()
@@ -155,14 +174,14 @@ class GraphHelpers(object):
 					
 					# Determine which function we are dealing with, since we pretty print them with different formats
 					if call['function'] == 'SetDefaultDllDirectories':
-						print('    {} [{}] -> {}'.format(
+						printed.append('    {} [{}] -> {}'.format(
 							GraphHelpers.formatFunctionName(call),
 							GraphHelpers.formatFlags(call['arguments'][0]),
 							GraphHelpers.formatReturnValue(call)
 						))
 					
 					elif call['function'] in ['SetDllDirectoryA', 'SetDllDirectoryW']:
-						print('    {} "{}" -> {}'.format(
+						printed.append('    {} "{}" -> {}'.format(
 							GraphHelpers.formatFunctionName(call),
 							call['arguments'][0],
 							GraphHelpers.formatReturnValue(call)
@@ -173,7 +192,7 @@ class GraphHelpers(object):
 						# Add the returned cookie to our list
 						cookies[call['result']] = call['arguments'][0]
 						
-						print('    {} "{}" -> {}'.format(
+						printed.append('    {} "{}" -> {}'.format(
 							GraphHelpers.formatFunctionName(call),
 							call['arguments'][0],
 							GraphHelpers.formatReturnValue(call)
@@ -184,29 +203,39 @@ class GraphHelpers(object):
 						# Retrieve the passed cookie from our list
 						cookie = cookies.get(call['arguments'][0], '<UNKNOWN>')
 						
-						print('    {} {} ("{}") -> {}'.format(
+						printed.append('    {} {} ("{}") -> {}'.format(
 							GraphHelpers.formatFunctionName(call),
 							call['arguments'][0],
 							cookie,
 							GraphHelpers.formatReturnValue(call)
 						))
 			
-			# Iterate over the edges for the module's LoadLibrary() calls
+			# Iterate over the edges for the module's LoadLibrary() and LdrLoadDll() calls
 			neighbours = graph[vertex]
 			if len(neighbours) == 0:
-				print('    This module did not load any libraries.')
+				printed.append('    This module did not load any libraries.')
 			else:
 				for _, edges in neighbours.items():
 					for _, edge in edges.items():
 						
-						# Print the call details with pretty formatting
+						# Determine if we are printing the search flags for the call
 						details = edge['details']
-						print('    {} "{}"{} -> {}'.format(
+						flags = ''
+						if extendedDetails == True and (details['function'].startswith('LoadLibraryEx') or details['function'] == 'LdrLoadDll'):
+							flags = ' [{}]'.format(GraphHelpers.formatFlags(
+								details['arguments'][1] if details['function'] == 'LdrLoadDll' else details['arguments'][2]
+							))
+						
+						# Print the call details with pretty formatting
+						printed.append('    {} "{}"{} -> {}'.format(
 							GraphHelpers.formatFunctionName(details),
 							details['arguments'][0],
-							' [{}]'.format(GraphHelpers.formatFlags(details['arguments'][2])) if extendedDetails == True and details['function'].startswith('LoadLibraryEx') else '',
+							flags,
 							GraphHelpers.formatReturnValue(details, successCondition = lambda e: e['result'] != 'NULL')
 						))
+			
+			# Print all unique output lines, preserving their ordering
+			print('\n'.join(list(OrderedDict.fromkeys(printed))))
 			
 			# Print a blank line after each module's call list
 			print()

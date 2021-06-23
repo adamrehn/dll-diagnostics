@@ -393,17 +393,12 @@ FARPROC WINAPI Interposed_GetProcAddress(HMODULE hModule, LPCSTR lpProcName)
 // The interposed version of LdrLoadDll
 NTSTATUS NTAPI Interposed_LdrLoadDll(PWSTR SearchPath, PULONG DllCharacteristics, PUNICODE_STRING DllName, PVOID* BaseAddress)
 {
-	// Invoke the real LdrLoadDll
-	NTSTATUS status = 0;
-	SetLastError(0);
-	SEH_GUARD(
-		status = Real_LdrLoadDll(SearchPath, DllCharacteristics, DllName, BaseAddress);
-	)
-	DWORD error = GetLastError();
-	DWORD statusError = (RtlNtStatusToDosError != nullptr) ? (DWORD)(RtlNtStatusToDosError(status)) : 0;
-	HMODULE result = (BaseAddress != nullptr) ? (HMODULE)(*BaseAddress) : nullptr;
+	// Determine whether the buffer in the UNICODE_STRING struct is null-terminated
+	size_t numChars = (size_t)(ceil((double)(DllName->Length) / 2.0));
+	size_t bufSize = (size_t)(ceil((double)(DllName->MaximumLength) / 2.0));
+	bool isNullTerminated = (wcsnlen_s(DllName->Buffer, bufSize) == numChars);
 	
-	// Capture a stack strace
+	// Capture a stack strace, ignoring the stack frame for the current function
 	const ULONG maxFrames = 63;
 	void* frames[maxFrames];
 	USHORT numFrames = CaptureStackBackTrace(1, maxFrames, frames, nullptr);
@@ -414,31 +409,43 @@ NTSTATUS NTAPI Interposed_LdrLoadDll(PWSTR SearchPath, PULONG DllCharacteristics
 		modules.push_back(GetCallerModule(frames[index]));
 	}
 	
-	// If we have instrumented the parent function that called LdrLoadDll() then we don't need to log anything
-	string module = GetCallerModule(&Interposed_LdrLoadDll);
-	if (std::find(modules.begin(), modules.end(), module) != modules.end()) {
-		return status;
-	}
-	
-	// Determine whether the buffer in the UNICODE_STRING struct is null-terminated
-	size_t numChars = (size_t)(ceil((double)(DllName->Length) / 2.0));
-	size_t bufSize = (size_t)(ceil((double)(DllName->MaximumLength) / 2.0));
-	bool isNullTerminated = (wcsnlen_s(DllName->Buffer, bufSize) == numChars);
-	
 	// Construct a JSON object for logging
 	json log = {
 		COMMON_LOG_FIELDS,
 		{"function",  "LdrLoadDll"},
-		{"arguments", { LoadLibraryExFlags((DWORD)SearchPath), UnicodeToUTF8(DllName->Buffer, isNullTerminated, numChars) }},
+		{"arguments", { UnicodeToUTF8(DllName->Buffer, isNullTerminated, numChars), LoadLibraryExFlags((DWORD)SearchPath) }},
 		{"stack",     modules},
-		{"status", {
-			{"code",    statusError},
-			{"message", FormatError(statusError)}
-		}}
 	};
 	
-	// Log the start of the call and the result of the call
-	LOG_FUNCTION_ENTRY_DEFERRED();
+	// Determine whether we have instrumented the parent function that called LdrLoadDll()
+	string module = GetCallerModule(&Interposed_LdrLoadDll);
+	bool alreadyInstrumented = (std::find(modules.begin(), modules.end(), module) != modules.end());
+	
+	// If we have instrumented the parent call then we don't need to log anything
+	if (alreadyInstrumented == false) {
+		LOG_FUNCTION_ENTRY_DEFERRED();
+	}
+	
+	// Invoke the real LdrLoadDll
+	NTSTATUS status = 0;
+	SetLastError(0);
+	SEH_GUARD(
+		status = Real_LdrLoadDll(SearchPath, DllCharacteristics, DllName, BaseAddress);
+	)
+	DWORD error = GetLastError();
+	DWORD statusError = (RtlNtStatusToDosError != nullptr) ? (DWORD)(RtlNtStatusToDosError(status)) : 0;
+	HMODULE result = (BaseAddress != nullptr) ? (HMODULE)(*BaseAddress) : nullptr;
+	
+	// Return the result immediately if we aren't logging the call
+	if (alreadyInstrumented) {
+		return status;
+	}
+	
+	// Log the result of the call
+	log["status"] = {
+		{"code",    statusError},
+		{"message", FormatError(statusError)}
+	};
 	LOG_FUNCTION_RESULT_DEFERRED(GetModuleName);
 	
 	return status;
