@@ -133,6 +133,7 @@ HMODULE WINAPI Interposed_LoadLibraryA(LPCSTR lpLibFileName)
 	
 	// Invoke the real LoadLibraryA
 	HMODULE result = nullptr;
+	SetLastError(0);
 	SEH_GUARD(
 		result = Real_LoadLibraryA(lpLibFileName);
 	)
@@ -159,6 +160,7 @@ HMODULE WINAPI Interposed_LoadLibraryW(LPCWSTR lpLibFileName)
 	
 	// Invoke the real LoadLibraryW
 	HMODULE result = nullptr;
+	SetLastError(0);
 	SEH_GUARD(
 		result = Real_LoadLibraryW(lpLibFileName);
 	)
@@ -185,6 +187,7 @@ HMODULE WINAPI Interposed_LoadLibraryExA(LPCSTR lpLibFileName, HANDLE hFile, DWO
 	
 	// Invoke the real LoadLibraryExA
 	HMODULE result = nullptr;
+	SetLastError(0);
 	SEH_GUARD(
 		result = Real_LoadLibraryExA(lpLibFileName, hFile, dwFlags);
 	)
@@ -211,6 +214,7 @@ HMODULE WINAPI Interposed_LoadLibraryExW(LPCWSTR lpLibFileName, HANDLE hFile, DW
 	
 	// Invoke the real LoadLibraryExW
 	HMODULE result = nullptr;
+	SetLastError(0);
 	SEH_GUARD(
 		result = Real_LoadLibraryExW(lpLibFileName, hFile, dwFlags);
 	)
@@ -237,6 +241,7 @@ BOOL WINAPI Interposed_SetDefaultDllDirectories(DWORD DirectoryFlags)
 	
 	// Invoke the real SetDefaultDllDirectories
 	BOOL result = FALSE;
+	SetLastError(0);
 	SEH_GUARD(
 		result = Real_SetDefaultDllDirectories(DirectoryFlags);
 	)
@@ -263,6 +268,7 @@ BOOL WINAPI Interposed_SetDllDirectoryA(LPCSTR lpPathName)
 	
 	// Invoke the real SetDllDirectoryA
 	BOOL result = FALSE;
+	SetLastError(0);
 	SEH_GUARD(
 		result = Real_SetDllDirectoryA(lpPathName);
 	)
@@ -289,6 +295,7 @@ BOOL WINAPI Interposed_SetDllDirectoryW(LPCWSTR lpPathName)
 	
 	// Invoke the real SetDllDirectoryW
 	BOOL result = FALSE;
+	SetLastError(0);
 	SEH_GUARD(
 		result = Real_SetDllDirectoryW(lpPathName);
 	)
@@ -315,6 +322,7 @@ DLL_DIRECTORY_COOKIE WINAPI Interposed_AddDllDirectory(PCWSTR NewDirectory)
 	
 	// Invoke the real AddDllDirectory
 	DLL_DIRECTORY_COOKIE result = nullptr;
+	SetLastError(0);
 	SEH_GUARD(
 		result = Real_AddDllDirectory(NewDirectory);
 	)
@@ -341,6 +349,7 @@ BOOL WINAPI Interposed_RemoveDllDirectory(DLL_DIRECTORY_COOKIE Cookie)
 	
 	// Invoke the real RemoveDllDirectory
 	BOOL result = FALSE;
+	SetLastError(0);
 	SEH_GUARD(
 		result = Real_RemoveDllDirectory(Cookie);
 	)
@@ -383,6 +392,7 @@ NTSTATUS NTAPI Interposed_LdrLoadDll(PWSTR SearchPath, PULONG DllCharacteristics
 {
 	// Invoke the real LdrLoadDll
 	NTSTATUS result = 0;
+	SetLastError(0);
 	SEH_GUARD(
 		result = Real_LdrLoadDll(SearchPath, DllCharacteristics, DllName, BaseAddress);
 	)
