@@ -75,6 +75,13 @@ class GraphHelpers(object):
 		return ' | '.join([colored(f, color='yellow') for f in flags])
 	
 	@staticmethod
+	def formatAnnotations(annotations):
+		'''
+		Formats a set of annotations for pretty-printing
+		'''
+		return ' '.join([colored('[{}]'.format(a), color='magenta', attrs=['bold']) for a in annotations])
+	
+	@staticmethod
 	def constructGraph(logEntries):
 		'''
 		Constructs a directed graph from the supplied list of log entries
@@ -158,7 +165,7 @@ class GraphHelpers(object):
 				continue
 			
 			# Print the module name
-			print('{}:'.format(colored(vertex, color='cyan')))
+			print('{}:'.format(colored(vertex, color='cyan', attrs=['bold'])))
 			
 			# Gather the list of pretty-printed function calls so we can filter out duplicates
 			printed = []
@@ -219,8 +226,14 @@ class GraphHelpers(object):
 				for _, edges in neighbours.items():
 					for _, edge in edges.items():
 						
-						# Determine if we are printing the search flags for the call
+						# Determine if we are annotating the call with any special information
 						details = edge['details']
+						annotations = []
+						if extendedDetails == True:
+							if details['function'] == 'LdrLoadDll' and details['module'].upper() == 'C:\WINDOWS\SYSTEM32\DXGI.DLL' and 'DriverStore' in details['result']:
+								annotations.append('DirectX UMD')
+						
+						# Determine if we are printing the search flags for the call
 						flags = ''
 						if extendedDetails == True and (details['function'].startswith('LoadLibraryEx') or details['function'] == 'LdrLoadDll'):
 							flags = ' [{}]'.format(GraphHelpers.formatFlags(
@@ -228,7 +241,8 @@ class GraphHelpers(object):
 							))
 						
 						# Print the call details with pretty formatting
-						printed.append('    {} "{}"{} -> {}'.format(
+						printed.append('    {}{} "{}"{} -> {}'.format(
+							(GraphHelpers.formatAnnotations(annotations) + ' ') if len(annotations) > 0 else '',
 							GraphHelpers.formatFunctionName(details),
 							details['arguments'][0],
 							flags,
