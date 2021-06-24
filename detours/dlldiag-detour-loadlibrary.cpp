@@ -433,7 +433,7 @@ NTSTATUS NTAPI Interposed_LdrLoadDll(PWSTR SearchPath, PULONG DllCharacteristics
 		status = Real_LdrLoadDll(SearchPath, DllCharacteristics, DllName, BaseAddress);
 	)
 	DWORD error = GetLastError();
-	DWORD statusError = (RtlNtStatusToDosError != nullptr) ? (DWORD)(RtlNtStatusToDosError(status)) : 0;
+	DWORD statusError = (RtlNtStatusToDosError != nullptr) ? (DWORD)(RtlNtStatusToDosError(status)) : error;
 	HMODULE result = (BaseAddress != nullptr) ? (HMODULE)(*BaseAddress) : nullptr;
 	
 	// Return the result immediately if we aren't logging the call
