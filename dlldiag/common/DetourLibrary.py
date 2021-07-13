@@ -1,5 +1,5 @@
 from .FileIO import FileIO
-import json, os, subprocess, tempfile
+import json, os, subprocess, tempfile, threading, time
 from os.path import abspath, dirname, join
 
 class DetourLibrary(object):
@@ -18,11 +18,12 @@ class DetourLibrary(object):
 		self.detourDLL = DetourLibrary._resolveDetourDLL(architecture, dll)
 		self.envVar = 'DLLDIAG_DETOUR_{}_LOGFILE'.format(dll.upper())
 	
-	def run(self, executable, args, capture=True, merge=False, **kwargs):
+	def run(self, executable, args, timeout=None, capture=True, merge=False, **kwargs):
 		'''
 		Runs the specified executable with our instrumentation DLL injected.
 		This is a wrapper for `subprocess.run()`.
 		
+		`timeout` specifies a timeout in seconds after which the process should be stopped.
 		`capture` specifies whether stdout and stderr should be captured.
 		`merge` specifies whether stderr should be redirected to stdout.
 		'''
@@ -44,15 +45,29 @@ class DetourLibrary(object):
 			logFile = join(tempDir, 'log.txt')
 			env[self.envVar] = logFile
 			
-			# Run the executable with our DLL injected
-			result = subprocess.run(
-				[self.withDLL, '/d:{}'.format(self.detourDLL), executable] + args,
+			# Start a child process to run the executable with our DLL injected
+			command = [self.withDLL, '/d:{}'.format(self.detourDLL), executable] + args
+			process = subprocess.Popen(
+				command,
 				stdout=stdout,
 				stderr=stderr,
 				universal_newlines=True,
 				env=env,
 				**kwargs
 			)
+			
+			# If a timeout was specified then spin off a separate thread to terminate the child process after the timeout elapses
+			if timeout is not None:
+				threading.Thread(
+					target=DetourLibrary._terminateAfterTimeout,
+					args=(process, timeout),
+					daemon=True
+				).start()
+			
+			# Wait for the child process to complete and retrieve its stdout, stderr and exit code
+			stdout, stderr = process.communicate(None)
+			exitCode = process.poll()
+			result = subprocess.CompletedProcess(command, exitCode, stdout, stderr)
 			
 			# Parse the log file and include it in the returned result
 			logEntries = [json.loads(line) for line in FileIO.readFile(logFile).splitlines()]
@@ -85,3 +100,24 @@ class DetourLibrary(object):
 			architecture,
 			'dlldiag-detour-{}.dll'.format(dll)
 		)
+	
+	@staticmethod
+	def _terminateAfterTimeout(process, timeout):
+		'''
+		Forcibly terminates a process and its child processes after the specified timeout elapses.
+		
+		`process` is a `subprocess.Popen` object representing the target process.
+		`timeout` specifies the timeout in seconds.
+		'''
+		
+		# Wait for the timeout to elapse
+		time.sleep(timeout)
+		
+		# If the child process is still running then use `taskkill` to terminate it
+		if process.returncode is None:
+			subprocess.run(
+				['taskkill', '/F', '/T', '/PID', str(process.pid)],
+				stdout=subprocess.DEVNULL,
+				stderr=subprocess.DEVNULL,
+				check=False
+			)
