@@ -230,7 +230,7 @@ class GraphHelpers(object):
 						details = edge['details']
 						annotations = []
 						if extendedDetails == True:
-							if details['function'] == 'LdrLoadDll' and details['module'].upper() == 'C:\WINDOWS\SYSTEM32\DXGI.DLL' and 'DriverStore' in details['result']:
+							if details['function'] == 'LdrLoadDll' and details['module'].upper() in ['C:\WINDOWS\SYSTEM32\DXGI.DLL', 'C:\WINDOWS\SYSTEM32\D3D12CORE.DLL'] and 'DriverStore' in details['result']:
 								annotations.append('DirectX UMD')
 						
 						# Determine if we are printing the search flags for the call
