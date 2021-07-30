@@ -184,17 +184,17 @@ def trace():
 		# Ensure the module path is an absolute path
 		args.module = os.path.abspath(args.module)
 		
-		# Determine the architecture of the module
-		print('Parsing module header and detecting architecture... ', end='')
+		# Parse the PE header for the module
+		print('Parsing module header and identifying non delay-loaded dependencies... ', end='')
 		header = ModuleHeader(args.module)
 		architecture = header.getArchitecture()
+		dependencies = StringUtils.sortCaseInsensitive(header.listImports() + header.listBoundImports())
 		print('done.\n')
 		
 		# Retrieve the list of delay-loaded dependencies, unless requested otherwise
-		dependencies = []
 		if args.no_delay_load == False:
 			print('Identifying the module\'s delay-loaded dependencies... ', end='')
-			dependencies = StringUtils.sortCaseInsensitive(header.listDelayLoadedImports())
+			dependencies.extend(StringUtils.sortCaseInsensitive(header.listDelayLoadedImports()))
 			print('done.\n')
 		
 		# Display the module details
@@ -202,11 +202,10 @@ def trace():
 		OutputFormatting.printModuleDetails(header)
 		print()
 		
-		# Display the list of delay-loaded dependencies
-		if args.no_delay_load == False:
-			print('The module imports {} delay-loaded dependencies:'.format(len(dependencies)))
-			print('\n'.join(dependencies))
-			print()
+		# Display the list of dependencies
+		print('The module imports {} direct dependencies:'.format(len(dependencies)))
+		print(colored('\n'.join(dependencies), color='yellow'))
+		print()
 		
 		# Verify that the debugger for the module's architecture is installed
 		debugger = WindowsDebugger()
@@ -218,7 +217,7 @@ def trace():
 		if helper.canRun() == False:
 			CommonErrors.cannotRunHelper(architecture)
 		
-		# Perform the LoadLibrary() trace for the module and each of its delay-loaded dependencies
+		# Perform the LoadLibrary() trace for the module and each of its dependencies
 		cwd = os.path.dirname(args.module)
 		rawOutput = ''
 		calls = []
