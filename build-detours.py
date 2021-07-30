@@ -4,7 +4,7 @@ from os.path import abspath, basename, dirname, isdir, join
 
 # Copies a file to a new location, logging the details
 def copy(source, dest):
-	print('[BUILD-HELPERS.PY] Copy {} => {}'.format(source, dest), file=sys.stderr, flush=True)
+	print('[BUILD-DETOURS.PY] Copy {} => {}'.format(source, dest), file=sys.stderr, flush=True)
 	if isdir(source):
 		shutil.copytree(source, dest)
 	else:
@@ -12,7 +12,7 @@ def copy(source, dest):
 
 # Executes a command, logging the details
 def run(command, **kwargs):
-	print('[BUILD-HELPERS.PY] {}'.format(command), file=sys.stderr, flush=True)
+	print('[BUILD-DETOURS.PY] {}'.format(command), file=sys.stderr, flush=True)
 	return subprocess.run(command, **kwargs)
 
 
