@@ -88,7 +88,7 @@ class GraphHelpers(object):
 		'''
 		
 		# Create a new directed graph with support for parallel edges
-		graph = nx.OrderedMultiDiGraph()
+		graph = nx.MultiDiGraph()
 		
 		# Maintain a list of function calls for which we've not yet seen a return value
 		pending = []

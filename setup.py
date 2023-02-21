@@ -20,6 +20,9 @@ setup(
 		'Programming Language :: Python :: 3.6',
 		'Programming Language :: Python :: 3.7',
 		'Programming Language :: Python :: 3.8',
+		'Programming Language :: Python :: 3.9',
+		'Programming Language :: Python :: 3.10',
+		'Programming Language :: Python :: 3.11',
 		'Topic :: Software Development :: Build Tools',
 		'Environment :: Console'
 	],
@@ -30,7 +33,7 @@ setup(
 	license='MIT',
 	packages=['dlldiag', 'dlldiag.common', 'dlldiag.subcommands'],
 	zip_safe=False,
-	python_requires = '>=3.5',
+	python_requires = '>=3.6',
 	install_requires = [
 		'colorama',
 		'pefile',
