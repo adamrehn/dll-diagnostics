@@ -14,7 +14,7 @@ The `dlldiag` command-line tool provides functionality to assist in identifying 
 
 The `dll-diagnostics` Python package requires the following:
 
-- Python 3.5 or newer
+- Python 3.6 or newer
 - Windows Server 2016 or newer, or Windows 10 version 1607 or newer
 - [Microsoft Visual C++ Redistributable for Visual Studio 2015-2019](https://support.microsoft.com/en-us/help/2977003/the-latest-supported-visual-c-downloads)
 - [Debugging Tools for Windows 10 (WinDbg)](https://docs.microsoft.com/en-us/windows-hardware/drivers/debugger/debugger-download-tools) (only needed for running the `dlldiag trace` command)
@@ -43,6 +43,6 @@ The `dlldiag` command-line tool provides the following subcommands:
 
 ## Legal
 
-Copyright &copy; 2019-2021, Adam Rehn. Licensed under the MIT License, see the file [LICENSE](https://github.com/adamrehn/dll-diagnostics/blob/master/LICENSE) for details.
+Copyright &copy; 2019-2023, Adam Rehn. Licensed under the MIT License, see the file [LICENSE](https://github.com/adamrehn/dll-diagnostics/blob/master/LICENSE) for details.
 
 Binary distributions of this package include parts of [Detours](https://github.com/microsoft/Detours) in object form. Detours is Copyright (c) Microsoft Corporation and is [licensed under the MIT license](https://github.com/microsoft/Detours/blob/master/LICENSE.md).
